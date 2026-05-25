@@ -93,6 +93,25 @@ export default function MarkdownPreview({ content }: { content: string }) {
           pre({ children }) {
             return <pre>{children}</pre>;
           },
+          img({ src, alt, ...props }) {
+            return (
+              <img
+                src={src}
+                alt={alt || ""}
+                {...props}
+                style={{
+                  maxWidth: "100%",
+                  height: "auto",
+                  borderRadius: 8,
+                  margin: "8px 0",
+                }}
+                loading="lazy"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
+              />
+            );
+          },
         }}
       >
         {content}

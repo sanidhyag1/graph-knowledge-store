@@ -1,11 +1,13 @@
 import uuid
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.services import embedding_service as emb_service
 from app.services.graph_service import get_article_neighbors
 
 
-async def hybrid_search(query: str, limit: int = 10, alpha: float = 0.5) -> list[dict]:
-    vector_results = await emb_service.search_similar(None, query, limit * 3)
+async def hybrid_search(session: AsyncSession, query: str, limit: int = 10, alpha: float = 0.5) -> list[dict]:
+    vector_results = await emb_service.search_similar(session, query, limit * 3)
     if not vector_results:
         return []
 

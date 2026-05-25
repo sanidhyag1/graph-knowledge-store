@@ -249,7 +249,8 @@ function McqRunner({
   const savedAnswer = savedAnswers[current] as { selected_index: number } | undefined;
   const isReview = readOnly && savedAnswer;
   const activeSelected = isReview ? savedAnswer.selected_index : selected;
-  const isCorrect = activeSelected === q.correct_index;
+  const correctIdx = typeof q.correct_index === "number" ? q.correct_index : parseInt(String(q.correct_index || "0"), 10) || 0;
+  const isCorrect = activeSelected === correctIdx;
 
   if (isReview && activeSelected !== null && activeSelected !== undefined) {
     const answer: QuizAnswer = { selected_index: activeSelected, correct: isCorrect };
@@ -260,18 +261,18 @@ function McqRunner({
           <Paper sx={{ p: 3, borderRadius: 3, mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}><LatexText text={q.question} /></Typography>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              {q.options.map((opt, i) => {
+              {(q.options || []).map((opt, i) => {
                 let borderColor = "divider";
                 let bgColor = "transparent";
-                if (i === q.correct_index) { borderColor = "#4caf50"; bgColor = "rgba(76,175,80,0.08)"; }
+                if (i === correctIdx) { borderColor = "#4caf50"; bgColor = "rgba(76,175,80,0.08)"; }
                 else if (i === activeSelected) { borderColor = "#ef5350"; bgColor = "rgba(239,83,80,0.08)"; }
                 return (
                   <Paper key={opt.label} variant="outlined" sx={{ p: 1.5, borderColor, backgroundColor: bgColor, borderRadius: 2 }}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                       <Chip label={opt.label} size="small" sx={{ fontWeight: 600, minWidth: 28 }} />
                       <Typography variant="body2"><LatexText text={opt.text} /></Typography>
-                      {i === q.correct_index && <CheckCircleOutlineOutlinedIcon sx={{ ml: "auto", color: "#4caf50", fontSize: 20 }} />}
-                      {i === activeSelected && !isCorrect && i !== q.correct_index && <CancelOutlinedIcon sx={{ ml: "auto", color: "#ef5350", fontSize: 20 }} />}
+                      {i === correctIdx && <CheckCircleOutlineOutlinedIcon sx={{ ml: "auto", color: "#4caf50", fontSize: 20 }} />}
+                      {i === activeSelected && !isCorrect && i !== correctIdx && <CancelOutlinedIcon sx={{ ml: "auto", color: "#ef5350", fontSize: 20 }} />}
                     </Box>
                   </Paper>
                 );
@@ -303,11 +304,11 @@ function McqRunner({
       <Paper sx={{ p: 3, borderRadius: 3, mb: 2 }}>
         <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}><LatexText text={q.question} /></Typography>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-          {q.options.map((opt, i) => {
+          {(q.options || []).map((opt, i) => {
             let borderColor = "divider";
             let bgColor = "transparent";
             if (selected !== null) {
-              if (i === q.correct_index) { borderColor = "#4caf50"; bgColor = "rgba(76,175,80,0.08)"; }
+              if (i === correctIdx) { borderColor = "#4caf50"; bgColor = "rgba(76,175,80,0.08)"; }
               else if (i === selected && !isCorrect) { borderColor = "#ef5350"; bgColor = "rgba(239,83,80,0.08)"; }
             }
             return (
@@ -326,8 +327,8 @@ function McqRunner({
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                   <Chip label={opt.label} size="small" sx={{ fontWeight: 600, minWidth: 28 }} />
                   <Typography variant="body2"><LatexText text={opt.text} /></Typography>
-                  {selected !== null && i === q.correct_index && <CheckCircleOutlineOutlinedIcon sx={{ ml: "auto", color: "#4caf50", fontSize: 20 }} />}
-                  {selected !== null && i === selected && !isCorrect && i !== q.correct_index && <CancelOutlinedIcon sx={{ ml: "auto", color: "#ef5350", fontSize: 20 }} />}
+                  {selected !== null && i === correctIdx && <CheckCircleOutlineOutlinedIcon sx={{ ml: "auto", color: "#4caf50", fontSize: 20 }} />}
+                  {selected !== null && i === selected && !isCorrect && i !== correctIdx && <CancelOutlinedIcon sx={{ ml: "auto", color: "#ef5350", fontSize: 20 }} />}
                 </Box>
               </Paper>
             );
@@ -419,7 +420,7 @@ function ShortAnswerRunner({
             <Typography variant="body2" sx={{ mb: 2 }}><LatexText text={q.model_answer} /></Typography>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>Key Points:</Typography>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-              {q.key_points.map((pt, i) => (
+              {(q.key_points || []).map((pt, i) => (
                 <Box key={i} sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
                   <EmojiObjectsOutlinedIcon sx={{ fontSize: 16, mt: 0.25, color: "warning.main" }} />
                   <Typography variant="body2" color="text.secondary"><LatexText text={pt} /></Typography>
@@ -479,7 +480,7 @@ function ShortAnswerRunner({
               Key Points:
             </Typography>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-              {q.key_points.map((pt, i) => (
+              {(q.key_points || []).map((pt, i) => (
                 <Box key={i} sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
                   <EmojiObjectsOutlinedIcon sx={{ fontSize: 16, mt: 0.25, color: "warning.main" }} />
                   <Typography variant="body2" color="text.secondary"><LatexText text={pt} /></Typography>

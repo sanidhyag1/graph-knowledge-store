@@ -33,7 +33,7 @@ async def search(
     session: AsyncSession = Depends(get_session),
 ):
     if mode == "hybrid":
-        results = await hybrid_search(q, limit, alpha)
+        results = await hybrid_search(session, q, limit, alpha)
     else:
         results = await emb_service.search_similar(session, q, limit)
 

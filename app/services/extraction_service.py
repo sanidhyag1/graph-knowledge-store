@@ -76,10 +76,24 @@ def extract_metadata(content: str) -> dict:
         data = _extract_json(raw)
         if not data:
             return {"topics": [], "keywords": [], "entities": [], "summary": ""}
+        
+        # Sanitize and normalize entities to list of dicts with name/type keys
+        raw_entities = data.get("entities", [])
+        sanitized_entities = []
+        if isinstance(raw_entities, list):
+            for ent in raw_entities:
+                if isinstance(ent, dict):
+                    name = str(ent.get("name", "")).strip()
+                    etype = str(ent.get("type", "Concept")).strip()
+                    if name:
+                        sanitized_entities.append({"name": name, "type": etype})
+                elif isinstance(ent, str) and ent.strip():
+                    sanitized_entities.append({"name": ent.strip(), "type": "Concept"})
+
         return {
             "topics": data.get("topics", [])[:5],
             "keywords": data.get("keywords", [])[:10],
-            "entities": data.get("entities", []),
+            "entities": sanitized_entities,
             "summary": data.get("summary", ""),
         }
     except Exception as e:

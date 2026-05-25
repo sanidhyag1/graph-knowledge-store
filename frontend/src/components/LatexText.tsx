@@ -2,24 +2,27 @@ import { useMemo } from "react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 
-export default function LatexText({ text }: { text: string }) {
+export default function LatexText({ text }: { text?: string | null }) {
+  const safeText = typeof text === "string" ? text : String(text || "");
+  
   const parts = useMemo(() => {
+    if (!safeText) return [];
     const result: { type: "text" | "math"; content: string }[] = [];
     const regex = /\$([^$]+)\$/g;
     let last = 0;
     let match: RegExpExecArray | null;
-    while ((match = regex.exec(text)) !== null) {
+    while ((match = regex.exec(safeText)) !== null) {
       if (match.index > last) {
-        result.push({ type: "text", content: text.slice(last, match.index) });
+        result.push({ type: "text", content: safeText.slice(last, match.index) });
       }
       result.push({ type: "math", content: match[1] });
       last = regex.lastIndex;
     }
-    if (last < text.length) {
-      result.push({ type: "text", content: text.slice(last) });
+    if (last < safeText.length) {
+      result.push({ type: "text", content: safeText.slice(last) });
     }
     return result;
-  }, [text]);
+  }, [safeText]);
 
   return (
     <>

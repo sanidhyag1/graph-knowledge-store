@@ -5,6 +5,9 @@ import random
 import re
 from functools import partial
 
+from pydantic import TypeAdapter, ValidationError
+from app.schemas.quiz import McqQuestion, ShortAnswerQuestion, FlashcardItem
+
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,15 +30,58 @@ def _questions_for_length(content_len: int) -> int:
     return 4
 
 
+CHUNK_SIZE = 10000  # ~2500 tokens — safe for 8192 context window
+
+def _chunk_content(content: str) -> list[str]:
+    """Split article content into chunks of roughly CHUNK_SIZE characters.
+    
+    Splits on paragraph boundaries (double newlines) to avoid cutting
+    sentences in half. If a single paragraph exceeds CHUNK_SIZE, it is
+    included as its own chunk (never mid-sentence split).
+    """
+    if len(content) <= CHUNK_SIZE:
+        return [content]
+
+    paragraphs = content.split("\n\n")
+    chunks = []
+    current_chunk = ""
+
+    for para in paragraphs:
+        # If adding this paragraph would exceed the limit, save current chunk and start new one
+        if current_chunk and len(current_chunk) + len(para) + 2 > CHUNK_SIZE:
+            chunks.append(current_chunk.strip())
+            current_chunk = para
+        else:
+            current_chunk = current_chunk + "\n\n" + para if current_chunk else para
+
+    # Don't forget the last chunk
+    if current_chunk.strip():
+        chunks.append(current_chunk.strip())
+
+    return chunks if chunks else [content[:CHUNK_SIZE]]
+
+
 def _assess_question_count(content: str, title: str, quiz_type: str) -> int:
-    prompt = ASSESS_PROMPT.format(quiz_type=quiz_type, title=title, content=content)
-    raw = chat(prompt, "You are a helpful assistant that responds with only integers.", num_ctx=min(len(content) + 500, settings.llm_quiz_num_ctx))
+    # Use first chunk for LLM assessment, but scale by total number of chunks
+    chunks = _chunk_content(content)
+    sample_chunk = chunks[0]
+
+    prompt = ASSESS_PROMPT.format(quiz_type=quiz_type, title=title, content=sample_chunk)
+    ctx_size = 8192
+
+    raw = chat(prompt, "You are a helpful assistant that responds with only integers.", num_ctx=ctx_size)
     text = raw.strip()
-    digits = "".join(c for c in text if c.isdigit())
-    if digits:
-        return max(1, min(int(digits), 15))
-    logger.warning("Assessment returned unparseable response: %s, falling back to length-based", text[:200])
-    return _questions_for_length(len(content))
+    match = re.search(r'\d+', text)
+
+    if match:
+        per_chunk = max(1, min(int(match.group()), 15))
+    else:
+        logger.warning("Assessment returned unparseable response: %s, falling back", text[:200])
+        per_chunk = _questions_for_length(len(sample_chunk))
+
+    # Scale by number of chunks, cap at 15
+    total = min(per_chunk * len(chunks), 15)
+    return max(1, total)
 
 
 MCQ_SYSTEM = """You are a JSON-only API. You output valid JSON arrays and nothing else. No prose. No markdown. No numbered lists. No explanation. Just JSON.
@@ -294,13 +340,13 @@ async def run_generation(quiz_id: str, articles: list[ArticleInfo]) -> None:
             return
 
         try:
-            num_ctx = settings.llm_quiz_num_ctx
             questions: list[dict] = list(attempt.questions) if attempt.questions else []
 
             use_llm_assessment = len(articles) == 1 and attempt.num_questions >= 10
 
             if use_llm_assessment:
                 article = articles[0]
+                logger.info(f"Running LLM assessment for article '{article.title}'...")
                 assessed = await loop.run_in_executor(
                     None, partial(_assess_question_count, article.content, article.title, attempt.quiz_type),
                 )
@@ -309,28 +355,52 @@ async def run_generation(quiz_id: str, articles: list[ArticleInfo]) -> None:
                 logger.info("LLM assessed %d questions for article '%s'", assessed, article.title)
                 await session.commit()
 
-            shuffled = list(range(len(articles)))
-            random.shuffle(shuffled)
-            idx = 0
+            # Build a flat list of (article_title, chunk_text) pairs
+            all_chunks = []
+            for article in articles:
+                chunks = _chunk_content(article.content)
+                for chunk in chunks:
+                    all_chunks.append((article.title, chunk))
+
+            random.shuffle(all_chunks)
+            chunk_idx = 0
             rounds = 0
-            max_rounds = len(articles) * 3
+            max_rounds = len(all_chunks) * 3  # Allow multiple passes over chunks
 
             while len(questions) < attempt.num_questions and rounds < max_rounds:
                 remaining = attempt.num_questions - len(questions)
-                article_idx = shuffled[idx % len(shuffled)]
-                article = articles[article_idx]
+                title, chunk_text = all_chunks[chunk_idx % len(all_chunks)]
 
-                k = min(_questions_for_length(len(article.content)), remaining)
+                k = min(_questions_for_length(len(chunk_text)), remaining)
 
                 system = _get_system_prompt(attempt.quiz_type, k)
                 dedup_section = _build_existing_questions_section(questions, attempt.quiz_type)
 
-                prompt = ARTICLE_PROMPT_TEMPLATE.format(title=article.title, content=article.content)
-                prompt = dedup_section + "\n" + prompt
+                prompt = ARTICLE_PROMPT_TEMPLATE.format(title=title, content=chunk_text)
+                if dedup_section:
+                    prompt = dedup_section + "\n" + prompt
                 prompt += f"\n\nGenerate exactly {k} question(s) from this article."
 
-                raw = await loop.run_in_executor(None, partial(chat, prompt, system, num_ctx))
-                parsed = _parse_json(raw)
+                ctx_size = 8192  # Safe limit — unchanged
+
+                logger.info(
+                    "Calling LLM: chunk %d/%d, length %d chars, num_ctx %d",
+                    (chunk_idx % len(all_chunks)) + 1, len(all_chunks),
+                    len(chunk_text), ctx_size,
+                )
+                parsed = []
+                current_prompt = prompt
+                for attempt_num in range(2):
+                    raw = await loop.run_in_executor(None, partial(chat, current_prompt, system, ctx_size))
+                    logger.info("LLM returned %d characters.", len(raw))
+                    try:
+                        parsed = _parse_and_validate(raw, attempt.quiz_type)
+                        logger.info("Parsed and validated %d questions from JSON.", len(parsed))
+                        break
+                    except ValueError as e:
+                        logger.warning("LLM validation failed for chunk %d (attempt %d): %s", chunk_idx % len(all_chunks), attempt_num + 1, e)
+                        if attempt_num == 0:
+                            current_prompt = prompt + f"\n\nIMPORTANT: Your previous response failed validation with these errors:\n{e}\n\nPlease regenerate the entire JSON array, making sure all objects strictly adhere to the requested schema and include all required fields."
 
                 added = 0
                 for q in parsed:
@@ -340,21 +410,10 @@ async def run_generation(quiz_id: str, articles: list[ArticleInfo]) -> None:
                         questions.append(q)
                         added += 1
 
-                if not parsed:
-                    logger.warning("Quiz generation: empty/invalid LLM response for article '%s', retrying once", article.title)
-                    raw2 = await loop.run_in_executor(None, partial(chat, prompt, system, num_ctx))
-                    parsed2 = _parse_json(raw2)
-                    for q in parsed2:
-                        if added >= k:
-                            break
-                        if not _is_duplicate(q, questions, attempt.quiz_type):
-                            questions.append(q)
-                            added += 1
-
                 attempt.questions = list(questions)
                 await session.commit()
 
-                idx += 1
+                chunk_idx += 1
                 rounds += 1
 
             if len(questions) == 0:
@@ -394,7 +453,6 @@ async def run_weak_areas_generation(quiz_id: str) -> None:
             return
 
         try:
-            num_ctx = settings.llm_quiz_num_ctx
             questions: list[dict] = list(attempt.questions) if attempt.questions else []
             n = attempt.num_questions
 
@@ -432,20 +490,25 @@ async def run_weak_areas_generation(quiz_id: str) -> None:
                 await session.commit()
                 return
 
-            shuffled_articles = list(range(len(articles)))
-            random.shuffle(shuffled_articles)
-            idx = 0
+            # Build chunks from all weak-area articles
+            all_chunks = []
+            for article in articles:
+                chunks = _chunk_content(article.content)
+                for chunk in chunks:
+                    all_chunks.append((article.title, chunk))
+
+            random.shuffle(all_chunks)
+            chunk_idx = 0
             rounds = 0
-            max_rounds = len(articles) * 3
+            max_rounds = len(all_chunks) * 3
 
             while len(questions) < n and rounds < max_rounds:
                 remaining = n - len(questions)
-                article_idx = shuffled_articles[idx % len(shuffled_articles)]
-                article = articles[article_idx]
+                title, chunk_text = all_chunks[chunk_idx % len(all_chunks)]
                 k = min(max(2, remaining), 5)
 
                 system = WEAK_AREAS_MCQ_SYSTEM.format(n=k)
-                prompt = ARTICLE_PROMPT_TEMPLATE.format(title=article.title, content=article.content)
+                prompt = ARTICLE_PROMPT_TEMPLATE.format(title=title, content=chunk_text)
                 prompt += WEAK_AREAS_FOCUS.format(focus_concepts=focus_concepts)
                 prompt += f"\n\nGenerate exactly {k} question(s)."
 
@@ -453,12 +516,23 @@ async def run_weak_areas_generation(quiz_id: str) -> None:
                 if dedup_section:
                     prompt = dedup_section + "\n" + prompt
 
-                raw = await loop.run_in_executor(None, partial(chat, prompt, system, num_ctx))
-                parsed = _parse_json(raw)
+                ctx_size = 8192
+
+                parsed = []
+                current_prompt = prompt
+                for attempt_num in range(2):
+                    raw = await loop.run_in_executor(None, partial(chat, current_prompt, system, ctx_size))
+                    try:
+                        parsed = _parse_and_validate(raw, "mcq")
+                        break
+                    except ValueError as e:
+                        logger.warning("Weak areas LLM validation failed (attempt %d): %s", attempt_num + 1, e)
+                        if attempt_num == 0:
+                            current_prompt = prompt + f"\n\nIMPORTANT: Your previous response failed validation with these errors:\n{e}\n\nPlease regenerate the entire JSON array, making sure all objects strictly adhere to the requested schema and include all required fields."
 
                 added = 0
                 for q in parsed:
-                    if added >= k:
+                    if added >= k or len(questions) >= n:
                         break
                     if not _is_duplicate(q, questions, "mcq"):
                         questions.append(q)
@@ -467,7 +541,7 @@ async def run_weak_areas_generation(quiz_id: str) -> None:
                 attempt.questions = list(questions)
                 await session.commit()
 
-                idx += 1
+                chunk_idx += 1
                 rounds += 1
 
             if len(questions) == 0:
@@ -668,3 +742,32 @@ def _parse_json(raw: str) -> list[dict]:
 
     logger.error("Quiz LLM returned unparseable output (first 500 chars): %s", text[:500])
     return []
+
+
+def _parse_and_validate(raw: str, quiz_type: str) -> list[dict]:
+    parsed_list = _parse_json(raw)
+    if not parsed_list:
+        raise ValueError("Invalid JSON format or empty array.")
+        
+    try:
+        if quiz_type == "mcq":
+            adapter = TypeAdapter(list[McqQuestion])
+            valid = adapter.validate_python(parsed_list)
+            return [q.model_dump() for q in valid]
+        elif quiz_type == "short_answer":
+            adapter = TypeAdapter(list[ShortAnswerQuestion])
+            valid = adapter.validate_python(parsed_list)
+            return [q.model_dump() for q in valid]
+        elif quiz_type == "flashcard":
+            adapter = TypeAdapter(list[FlashcardItem])
+            valid = adapter.validate_python(parsed_list)
+            return [q.model_dump() for q in valid]
+    except ValidationError as e:
+        errors = []
+        for err in e.errors():
+            loc = ".".join(str(l) for l in err["loc"])
+            errors.append(f"Location '{loc}': {err['msg']}")
+        error_text = "\n".join(errors)
+        raise ValueError(f"JSON schema validation failed:\n{error_text}")
+        
+    return parsed_list

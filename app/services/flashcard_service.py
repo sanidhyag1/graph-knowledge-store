@@ -113,7 +113,7 @@ def _recover_truncated_json(text: str) -> list[dict]:
     fragment = text[start:]
 
     cards: list[dict] = []
-    for m in re.finditer(r'\{\s*"front"\s*:\s*"', fragment):
+    for m in re.finditer(r'\{\s*"front"\s*:\s*"', fragment, re.IGNORECASE):
         obj_start = m.start()
         card = _extract_card_from(fragment[obj_start:])
         if card:
@@ -123,19 +123,19 @@ def _recover_truncated_json(text: str) -> list[dict]:
 
 
 def _extract_card_from(text: str) -> dict | None:
-    front_match = re.search(r'"front"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+    front_match = re.search(r'"front"\s*:\s*"((?:[^"\\]|\\.)*)"', text, re.IGNORECASE)
     if not front_match:
         return None
     front = front_match.group(1)
 
     remaining = text[front_match.end():]
-    back_match = re.search(r'"back"\s*:\s*"((?:[^"\\]|\\.)*)"', remaining)
+    back_match = re.search(r'"back"\s*:\s*"((?:[^"\\]|\\.)*)"', remaining, re.IGNORECASE)
     if not back_match:
         return None
     back = back_match.group(1)
 
     remaining = remaining[back_match.end():]
-    hint_match = re.search(r'"hint"\s*:\s*"((?:[^"\\]|\\.)*)"', remaining)
+    hint_match = re.search(r'"hint"\s*:\s*"((?:[^"\\]|\\.)*)"', remaining, re.IGNORECASE)
     hint = hint_match.group(1) if hint_match else ""
 
     def _unescape(s: str) -> str:
@@ -172,20 +172,69 @@ def generate_flashcards_sync(
     num_ctx = min(len(content) + 2000, settings.llm_quiz_num_ctx)
     raw = chat(prompt, system, num_ctx=num_ctx, article_id=str(article_id))
     parsed = _parse_json(raw)
+    logger.error("DEBUG RAW OUTPUT: %s", raw)
+    logger.error("DEBUG PARSED OUTPUT: %s", parsed)
 
     cards = []
+    duplicates_count = 0
+    invalid_count = 0
     for item in parsed:
-        front = item.get("front", "").strip()
-        back = item.get("back", "").strip()
-        hint = item.get("hint", "").strip()
+        if isinstance(item, str):
+            import json as _json
+            try:
+                item = _json.loads(item)
+            except (_json.JSONDecodeError, ValueError):
+                pass
+                
+        if isinstance(item, (list, tuple)):
+            if len(item) >= 2:
+                item = {"front": str(item[0]), "back": str(item[1]), "hint": str(item[2]) if len(item) > 2 else ""}
+            
+        if not isinstance(item, dict):
+            logger.error("Flashcard item is not a dict: %r", item)
+            invalid_count += 1
+            continue
+            
+        item_lower = {str(k).lower(): v for k, v in item.items()}
+        
+        front_keys = {"front", "question", "term", "concept", "q", "title", "name"}
+        back_keys = {"back", "answer", "definition", "explanation", "a", "content", "value"}
+        
+        front_val = next((item_lower[k] for k in front_keys if k in item_lower), "")
+        back_val = next((item_lower[k] for k in back_keys if k in item_lower), "")
+        hint_val = item_lower.get("hint") or item_lower.get("clue") or ""
+        
+        if not hint_val:
+            leftovers = []
+            for k, v in item_lower.items():
+                if k not in front_keys and k not in back_keys and k not in {"hint", "clue"}:
+                    if isinstance(v, str):
+                        leftovers.append(f"{k.title()}: {v}")
+                    elif isinstance(v, list):
+                        leftovers.append(f"{k.title()}: {', '.join(str(x) for x in v)}")
+            if leftovers:
+                hint_val = " | ".join(leftovers)
+        
+        front = str(front_val).strip() if front_val else ""
+        back = str(back_val).strip() if back_val else ""
+        hint = str(hint_val).strip() if hint_val else ""
+        
         if not front or not back:
+            logger.error("Flashcard item missing front/back: %r", item)
+            invalid_count += 1
             continue
+            
         if _is_duplicate(front, existing + [c["front"] for c in cards]):
+            duplicates_count += 1
             continue
+            
         cards.append({"front": front, "back": back, "hint": hint})
 
     if not cards and parsed:
-        logger.warning("Flashcard generation: all %d cards were duplicates for article %s", len(parsed), article_id)
+        if duplicates_count == len(parsed):
+            logger.warning("Flashcard generation: all %d cards were duplicates for article %s", len(parsed), article_id)
+        else:
+            logger.warning("Flashcard generation: 0 cards generated (parsed %d, %d invalid, %d duplicates) for article %s", len(parsed), invalid_count, duplicates_count, article_id)
 
     return cards
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import { api, type FlashcardData, type DeckInfo, type StudyStats } from "../api/client";
@@ -18,14 +18,6 @@ import SchoolOutlinedIcon from "@mui/icons-material/SchoolOutlined";
 import QuizOutlinedIcon from "@mui/icons-material/QuizOutlined";
 
 type View = "overview" | "session" | "summary";
-
-function formatNextReview(card: FlashcardData): string {
-  if (card.state === "new") return "New";
-  const mins = card.interval;
-  if (mins < 60) return `${mins}m`;
-  if (mins < 1440) return `${Math.round(mins / 60)}h`;
-  return `${Math.round(mins / 1440)}d`;
-}
 
 function getNextInterval(card: FlashcardData, rating: number): string {
   const ease = card.ease_factor;
@@ -229,7 +221,7 @@ export default function StudyPage() {
       setView("summary");
       return null;
     }
-    const remaining = queue.length - currentIdx;
+
     return (
       <Box sx={{ maxWidth: 640, mx: "auto" }}>
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
