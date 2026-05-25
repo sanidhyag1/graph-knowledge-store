@@ -31,6 +31,8 @@ import EditNoteOutlinedIcon from "@mui/icons-material/EditNoteOutlined";
 import StyleOutlinedIcon from "@mui/icons-material/StyleOutlined";
 import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
 import CloseOutlinedIcon from "@mui/icons-material/CloseOutlined";
+import BookmarkOutlinedIcon from "@mui/icons-material/BookmarkOutlined";
+import BookmarkIcon from "@mui/icons-material/Bookmark";
 
 const ACTIVE_QUIZ_KEY = "active-quiz-id";
 
@@ -54,6 +56,7 @@ export default function ArticleView() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [allTopics, setAllTopics] = useState<string[]>([]);
   const [allKeywords, setAllKeywords] = useState<string[]>([]);
+  const [bookmarked, setBookmarked] = useState(false);
   const tagInputRef = useRef<HTMLInputElement>(null);
   const tagContainerRef = useRef<HTMLDivElement>(null);
   const { enqueueSnackbar } = useSnackbar();
@@ -61,6 +64,12 @@ export default function ArticleView() {
   useEffect(() => {
     api.getArticle(id).then(setArticle).catch(() => navigate("/"));
   }, [id, navigate]);
+
+  useEffect(() => {
+    api.getBookmarkIds().then((res) => {
+      setBookmarked(res.ids.includes(id));
+    });
+  }, [id]);
 
   useEffect(() => {
     if (article) {
@@ -101,6 +110,12 @@ export default function ArticleView() {
     setConfirmOpen(false);
     await api.deleteArticle(article!.id);
     navigate("/");
+  }
+
+  async function handleToggleBookmark() {
+    if (!article) return;
+    const res = await api.toggleBookmark(article.id);
+    setBookmarked(res.bookmarked);
   }
 
   async function handleQuizTypeSelect(quizType: QuizType) {
@@ -163,6 +178,14 @@ export default function ArticleView() {
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
         <Typography variant="h4" sx={{ fontWeight: 700, flex: 1, pr: 2 }}>{article.title}</Typography>
         <Box sx={{ display: "flex", gap: 1, flexShrink: 0 }}>
+          <Button
+            variant="outlined"
+            startIcon={bookmarked ? <BookmarkIcon /> : <BookmarkOutlinedIcon />}
+            onClick={handleToggleBookmark}
+            color={bookmarked ? "warning" : "primary"}
+          >
+            {bookmarked ? "Saved" : "Bookmark"}
+          </Button>
           <Button
             variant="outlined"
             startIcon={<SchoolOutlinedIcon />}

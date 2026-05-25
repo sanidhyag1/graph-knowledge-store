@@ -14,16 +14,26 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Button from "@mui/material/Button";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import BookmarkBorderOutlinedIcon from "@mui/icons-material/BookmarkBorderOutlined";
+import BookmarkIcon from "@mui/icons-material/Bookmark";
 import { api, type ArticleListItem } from "../api/client";
 
-export default function ArticleCard({ article }: { article: ArticleListItem }) {
+export default function ArticleCard({ article, bookmarked: initialBookmarked, onBookmarkToggle }: { article: ArticleListItem; bookmarked?: boolean; onBookmarkToggle?: (id: string, bookmarked: boolean) => void }) {
   const navigate = useNavigate();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [bookmarked, setBookmarked] = useState(initialBookmarked ?? false);
 
   async function handleDelete() {
     setConfirmOpen(false);
     await api.deleteArticle(article.id);
     window.location.reload();
+  }
+
+  async function handleToggleBookmark(e: React.MouseEvent) {
+    e.stopPropagation();
+    const res = await api.toggleBookmark(article.id);
+    setBookmarked(res.bookmarked);
+    onBookmarkToggle?.(article.id, res.bookmarked);
   }
 
   return (
@@ -72,6 +82,13 @@ export default function ArticleCard({ article }: { article: ArticleListItem }) {
           </Box>
         </CardActionArea>
         <CardActions sx={{ position: "absolute", top: 4, right: 4, p: 0 }}>
+          <IconButton
+            size="small"
+            onClick={handleToggleBookmark}
+            sx={{ opacity: bookmarked ? 1 : 0.3, "&:hover": { opacity: 1, color: "warning.main" }, ...(bookmarked ? { color: "warning.main" } : {}) }}
+          >
+            {bookmarked ? <BookmarkIcon fontSize="small" /> : <BookmarkBorderOutlinedIcon fontSize="small" />}
+          </IconButton>
           <IconButton
             size="small"
             onClick={(e) => { e.stopPropagation(); setConfirmOpen(true); }}

@@ -226,6 +226,24 @@ export interface AskResponse {
   sources: { id: string; title: string; score: number }[];
 }
 
+export interface BookmarkArticleItem {
+  id: string;
+  title: string;
+  summary: string | null;
+  topics: string[];
+  enrichment_status: string;
+  created_at: string;
+  updated_at: string;
+  bookmarked_at: string;
+}
+
+export interface BookmarkListResponse {
+  articles: BookmarkArticleItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export interface LLMCallLog {
   id: string;
   operation: string;
@@ -462,4 +480,13 @@ export const api = {
 
   getDueCount: () =>
     request<{ due_now: number; new: number }>("/study/due-count"),
+
+  toggleBookmark: (articleId: string) =>
+    request<{ bookmarked: boolean }>(`/bookmarks/${articleId}`, { method: "POST" }),
+
+  listBookmarks: (page = 1, limit = 10) =>
+    request<BookmarkListResponse>(`/bookmarks?page=${page}&limit=${limit}`),
+
+  getBookmarkIds: () =>
+    request<{ ids: string[] }>("/bookmarks/ids"),
 };

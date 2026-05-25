@@ -15,6 +15,7 @@ import Button from "@mui/material/Button";
 import Tooltip from "@mui/material/Tooltip";
 import IconButton from "@mui/material/IconButton";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
+import BookmarkOutlinedIcon from "@mui/icons-material/BookmarkOutlined";
 import AddBoxOutlinedIcon from "@mui/icons-material/AddBoxOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
@@ -33,6 +34,7 @@ const ACTIVE_QUIZ_KEY = "active-quiz-id";
 
 const NAV_ITEMS = [
   { to: "/", label: "Articles", icon: <MenuBookOutlinedIcon />, end: true },
+  { to: "/bookmarks", label: "Bookmarks", icon: <BookmarkOutlinedIcon />, end: false },
   { to: "/editor", label: "New Article", icon: <AddBoxOutlinedIcon />, end: false },
   { to: "/search", label: "Search", icon: <SearchOutlinedIcon />, end: false },
   { to: "/graph", label: "Graph", icon: <AccountTreeOutlinedIcon />, end: false },

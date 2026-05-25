@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import MaterialThemeProvider from "./components/MaterialThemeProvider";
 import Layout from "./components/Layout";
 import HomePage from "./pages/HomePage";
+import BookmarksPage from "./pages/BookmarksPage";
 import EditorPage from "./pages/EditorPage";
 import ArticlePage from "./pages/ArticlePage";
 import SearchPage from "./pages/SearchPage";
@@ -18,6 +19,7 @@ export default function App() {
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<HomePage />} />
+            <Route path="/bookmarks" element={<BookmarksPage />} />
             <Route path="/editor" element={<EditorPage />} />
             <Route path="/editor/:id" element={<EditorPage />} />
             <Route path="/article/:id" element={<ArticlePage />} />

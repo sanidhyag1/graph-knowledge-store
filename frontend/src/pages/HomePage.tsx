@@ -23,6 +23,7 @@ export default function HomePage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [bookmarkIds, setBookmarkIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setPage(1);
@@ -33,6 +34,7 @@ export default function HomePage() {
       setArticles(res.articles);
       setTotal(res.total);
     });
+    api.getBookmarkIds().then((res) => setBookmarkIds(new Set(res.ids)));
   }, [page, pageSize, topic, keyword]);
 
   function clearFilter() {
@@ -82,7 +84,7 @@ export default function HomePage() {
       ) : (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {articles.map((a) => (
-            <ArticleCard key={a.id} article={a} />
+            <ArticleCard key={a.id} article={a} bookmarked={bookmarkIds.has(a.id)} />
           ))}
         </Box>
       )}
