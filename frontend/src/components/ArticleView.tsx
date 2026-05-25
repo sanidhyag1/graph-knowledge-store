@@ -63,6 +63,15 @@ export default function ArticleView() {
   }, [id, navigate]);
 
   useEffect(() => {
+    if (article) {
+      document.title = article.title;
+    }
+    return () => {
+      document.title = "Knowledge Store";
+    };
+  }, [article]);
+
+  useEffect(() => {
     api.getArticlesIndex().then((data) => {
       const topicSet = new Set<string>();
       const keywordSet = new Set<string>();
