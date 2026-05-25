@@ -12,6 +12,7 @@ class BookmarkArticleItem(BaseModel):
     enrichment_status: str = "pending"
     created_at: datetime
     updated_at: datetime
+    source: str = "manual"
     bookmarked_at: datetime
 
     model_config = {"from_attributes": True}

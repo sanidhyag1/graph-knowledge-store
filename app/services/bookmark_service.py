@@ -54,6 +54,7 @@ async def list_bookmarks(
             "enrichment_status": art.enrichment_status,
             "created_at": art.created_at,
             "updated_at": art.updated_at,
+            "source": art.source,
             "bookmarked_at": bm.created_at,
         })
 

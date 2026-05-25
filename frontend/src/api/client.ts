@@ -237,6 +237,7 @@ export interface BookmarkArticleItem {
   enrichment_status: string;
   created_at: string;
   updated_at: string;
+  source: string;
   bookmarked_at: string;
 }
 

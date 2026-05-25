@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { api, type BookmarkArticleItem } from "../api/client";
 import ArticleCard from "../components/ArticleCard";
 import PaginationControls from "../components/PaginationControls";
@@ -9,7 +8,6 @@ import Box from "@mui/material/Box";
 const DEFAULT_PAGE_SIZE = 10;
 
 export default function BookmarksPage() {
-  const navigate = useNavigate();
   const [articles, setArticles] = useState<BookmarkArticleItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
