@@ -23,6 +23,7 @@ import QuizOutlinedIcon from "@mui/icons-material/QuizOutlined";
 import SchoolOutlinedIcon from "@mui/icons-material/SchoolOutlined";
 import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
 import MonitorHeartOutlinedIcon from "@mui/icons-material/MonitorHeartOutlined";
+import FolderSpecialOutlinedIcon from "@mui/icons-material/FolderSpecialOutlined";
 import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
 import ChevronLeftOutlinedIcon from "@mui/icons-material/ChevronLeftOutlined";
@@ -42,6 +43,7 @@ const NAV_ITEMS = [
   { to: "/study", label: "Study", icon: <SchoolOutlinedIcon />, end: false },
   { to: "/chat", label: "Ask AI", icon: <SmartToyOutlinedIcon />, end: false },
   { to: "/llm-monitor", label: "LLM Monitor", icon: <MonitorHeartOutlinedIcon />, end: false },
+  { to: "/obsidian", label: "Obsidian", icon: <FolderSpecialOutlinedIcon />, end: false },
 ];
 
 const DRAWER_FULL = 240;

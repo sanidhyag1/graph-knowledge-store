@@ -31,6 +31,39 @@ export default function ArticleEditor() {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [fixing, setFixing] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  async function handlePaste(e: React.ClipboardEvent) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) continue;
+
+        setUploading(true);
+        try {
+          const result = await api.uploadImage(file);
+          const imageMarkdown = `![image](${result.url})`;
+          setContent((prev) => {
+            const ta = getTextArea();
+            if (ta) {
+              const pos = ta.selectionStart;
+              return prev.substring(0, pos) + imageMarkdown + prev.substring(pos);
+            }
+            return prev + "\n" + imageMarkdown;
+          });
+          enqueueSnackbar("Image uploaded", { variant: "success", autoHideDuration: 2000 });
+        } catch {
+          enqueueSnackbar("Image upload failed", { variant: "error" });
+        }
+        setUploading(false);
+        break;
+      }
+    }
+  }
 
   if (isEditing && !loaded) {
     (async () => {
@@ -170,7 +203,15 @@ export default function ArticleEditor() {
         </Tooltip>
       </Box>
 
-      <MDEditor value={content} onChange={(v) => setContent(v || "")} height={700} />
+      <div onPaste={handlePaste}>
+        <MDEditor value={content} onChange={(v) => setContent(v || "")} height={700} />
+        {uploading && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
+            <CircularProgress size={16} />
+            <Typography variant="caption" color="text.secondary">Uploading image...</Typography>
+          </Box>
+        )}
+      </div>
     </Box>
   );
 }

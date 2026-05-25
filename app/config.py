@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     neo4j_user: str = "neo4j"
     neo4j_password: str = "password123"
 
+    obsidian_vault_path: str = ""
+    obsidian_sync_interval_minutes: int = 30
+    obsidian_attachment_path: str = ""
+    upload_dir: str = "uploads"
+
     @property
     def postgres_url(self) -> str:
         return (

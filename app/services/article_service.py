@@ -176,6 +176,12 @@ async def delete_article(session: AsyncSession, article_id: uuid.UUID) -> bool:
     loop = get_running_loop()
     await loop.run_in_executor(_executor, delete_article_from_graph, article_id)
 
+    # Remove from Obsidian tracking if applicable
+    from app.models.obsidian_tracked_file import ObsidianTrackedFile
+    await session.execute(
+        delete(ObsidianTrackedFile).where(ObsidianTrackedFile.article_id == article_id)
+    )
+
     await session.execute(delete(Article).where(Article.id == article_id))
     await session.commit()
     return True

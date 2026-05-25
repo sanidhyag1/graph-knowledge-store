@@ -16,6 +16,8 @@ import Button from "@mui/material/Button";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import BookmarkBorderOutlinedIcon from "@mui/icons-material/BookmarkBorderOutlined";
 import BookmarkIcon from "@mui/icons-material/Bookmark";
+import DiamondOutlinedIcon from "@mui/icons-material/DiamondOutlined";
+import Tooltip from "@mui/material/Tooltip";
 import { api, type ArticleListItem } from "../api/client";
 
 export default function ArticleCard({ article, bookmarked: initialBookmarked, onBookmarkToggle }: { article: ArticleListItem; bookmarked?: boolean; onBookmarkToggle?: (id: string, bookmarked: boolean) => void }) {
@@ -49,6 +51,11 @@ export default function ArticleCard({ article, bookmarked: initialBookmarked, on
           <CardContent sx={{ pb: 1 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }} gutterBottom>
               {article.title}
+              {article.source === "obsidian" && (
+                <Tooltip title="Synced from Obsidian" arrow>
+                  <DiamondOutlinedIcon sx={{ fontSize: 16, color: "#7C3AED", ml: 0.5, verticalAlign: "middle" }} />
+                </Tooltip>
+              )}
             </Typography>
             {article.summary && (
               <Typography variant="body2" color="text.secondary" sx={{

@@ -33,6 +33,8 @@ import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
 import CloseOutlinedIcon from "@mui/icons-material/CloseOutlined";
 import BookmarkOutlinedIcon from "@mui/icons-material/BookmarkOutlined";
 import BookmarkIcon from "@mui/icons-material/Bookmark";
+import DiamondOutlinedIcon from "@mui/icons-material/DiamondOutlined";
+import Tooltip from "@mui/material/Tooltip";
 
 const ACTIVE_QUIZ_KEY = "active-quiz-id";
 
@@ -176,7 +178,14 @@ export default function ArticleView() {
   return (
     <Box sx={{ maxWidth: 900 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, flex: 1, pr: 2 }}>{article.title}</Typography>
+        <Typography variant="h4" sx={{ fontWeight: 700, flex: 1, pr: 2 }}>
+          {article.title}
+          {article.source === "obsidian" && (
+            <Tooltip title="Synced from Obsidian" arrow>
+              <Chip label="Obsidian" size="small" icon={<DiamondOutlinedIcon />} sx={{ ml: 1, bgcolor: "#7C3AED22", color: "#7C3AED", fontWeight: 600 }} />
+            </Tooltip>
+          )}
+        </Typography>
         <Box sx={{ display: "flex", gap: 1, flexShrink: 0 }}>
           <Button
             variant="outlined"
@@ -221,13 +230,15 @@ export default function ArticleView() {
           >
             {copied ? "Copied" : "Copy"}
           </Button>
-          <Button
-            variant="outlined"
-            startIcon={<EditOutlinedIcon />}
-            onClick={() => navigate(`/editor/${article.id}`)}
-          >
-            Edit
-          </Button>
+          {article.source !== "obsidian" && (
+            <Button
+              variant="outlined"
+              startIcon={<EditOutlinedIcon />}
+              onClick={() => navigate(`/editor/${article.id}`)}
+            >
+              Edit
+            </Button>
+          )}
           <Button
             variant="outlined"
             color="error"
@@ -362,7 +373,11 @@ export default function ArticleView() {
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
         <DialogTitle>Delete Article?</DialogTitle>
         <DialogContent>
-          <Typography>This will permanently delete &quot;{article.title}&quot;.</Typography>
+          <Typography>
+            {article.source === "obsidian"
+              ? `This will remove "${article.title}" from the app. The original file in your Obsidian vault will not be affected.`
+              : `This will permanently delete "${article.title}".`}
+          </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>

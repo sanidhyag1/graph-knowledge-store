@@ -21,6 +21,8 @@ class ArticleResponse(BaseModel):
     title: str
     content: str
     summary: str | None = None
+    source: str = "manual"
+    obsidian_file_path: str | None = None
     topics: list = Field(default_factory=list)
     keywords: list = Field(default_factory=list)
     entities: list = Field(default_factory=list)
@@ -35,6 +37,7 @@ class ArticleListItem(BaseModel):
     id: uuid.UUID
     title: str
     summary: str | None = None
+    source: str = "manual"
     topics: list = Field(default_factory=list)
     enrichment_status: str = "pending"
     created_at: datetime

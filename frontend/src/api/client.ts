@@ -11,6 +11,8 @@ export interface Article {
   enrichment_status: string;
   created_at: string;
   updated_at: string;
+  source: string;  // "manual" | "obsidian"
+  obsidian_file_path: string | null;
 }
 
 export interface ArticleListItem {
@@ -21,6 +23,7 @@ export interface ArticleListItem {
   enrichment_status: string;
   created_at: string;
   updated_at: string;
+  source: string;
 }
 
 export interface ArticleListResponse {
@@ -292,6 +295,31 @@ export interface LLMStatsResponse {
   recent_errors: LLMCallLog[];
 }
 
+export interface VaultEntry {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  is_tracked: boolean;
+}
+
+export interface TrackedFile {
+  id: string;
+  relative_path: string;
+  article_id: string | null;
+  file_hash: string | null;
+  last_synced_at: string | null;
+  status: string;
+}
+
+export interface ObsidianStatus {
+  configured: boolean;
+  vault_path: string;
+  sync_interval_minutes: number;
+  last_sync_at: string | null;
+  tracked_count: number;
+  attachment_path: string;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -489,4 +517,21 @@ export const api = {
 
   getBookmarkIds: () =>
     request<{ ids: string[] }>("/bookmarks/ids"),
+
+  // Obsidian
+  obsidianStatus: () => request<ObsidianStatus>("/obsidian/status"),
+  obsidianBrowse: (path = "") => request<{ entries: VaultEntry[]; current_path: string }>(`/obsidian/browse?path=${encodeURIComponent(path)}`),
+  obsidianTracked: () => request<{ files: TrackedFile[] }>("/obsidian/tracked"),
+  obsidianTrack: (paths: string[]) => request<{ tracked: number }>("/obsidian/track", { method: "POST", body: JSON.stringify({ paths }) }),
+  obsidianUntrack: (paths: string[]) => request<{ untracked: number }>("/obsidian/untrack", { method: "POST", body: JSON.stringify({ paths }) }),
+  obsidianSync: () => request<{ synced: number; errors: number; missing: number }>("/obsidian/sync", { method: "POST" }),
+  obsidianUpdateSettings: (data: { attachment_path: string }) => request<{ attachment_path: string }>("/obsidian/settings", { method: "POST", body: JSON.stringify(data) }),
+
+  uploadImage: async (file: File): Promise<{ url: string }> => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_BASE}/uploads`, { method: "POST", body: form });
+    if (!res.ok) throw new Error("Upload failed");
+    return res.json();
+  },
 };

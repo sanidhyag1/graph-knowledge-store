@@ -11,6 +11,7 @@ import QuizPage from "./pages/QuizPage";
 import StudyPage from "./pages/StudyPage";
 import ChatPage from "./pages/ChatPage";
 import LLMDashboardPage from "./pages/LLMDashboardPage";
+import ObsidianPage from "./pages/ObsidianPage";
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="/study" element={<StudyPage />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/llm-monitor" element={<LLMDashboardPage />} />
+            <Route path="/obsidian" element={<ObsidianPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
