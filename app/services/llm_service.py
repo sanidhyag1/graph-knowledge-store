@@ -23,16 +23,21 @@ def _call_llm(
     operation: str = "chat",
     input_text: str = "",
     article_id=None,
+    max_tokens: int | None = None,
 ) -> str:
     start = time.monotonic()
     try:
         client = get_client()
-        response = client.chat.completions.create(
-            model=settings.llm_chat_model,
-            messages=messages,
-            temperature=0.1,
-            extra_body={"num_ctx": ctx},
-        )
+        kwargs = {
+            "model": settings.llm_chat_model,
+            "messages": messages,
+            "temperature": 0.1,
+            "extra_body": {"num_ctx": ctx},
+        }
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
+            
+        response = client.chat.completions.create(**kwargs)
         content = response.choices[0].message.content
         log_llm_call(
             operation=operation,
@@ -83,21 +88,23 @@ def chat(
     system: str = "You are a helpful assistant.",
     num_ctx: int | None = None,
     article_id=None,
+    max_tokens: int | None = None,
 ) -> str:
     ctx = num_ctx or settings.llm_num_ctx
     messages = [
         {"role": "system", "content": system},
         {"role": "user", "content": prompt},
     ]
-    return _call_llm(messages, ctx, operation="chat", input_text=prompt, article_id=article_id)
+    return _call_llm(messages, ctx, operation="chat", input_text=prompt, article_id=article_id, max_tokens=max_tokens)
 
 
 def chat_messages(
     messages: list[dict],
     num_ctx: int | None = None,
+    max_tokens: int | None = None,
 ) -> str:
     ctx = num_ctx or settings.llm_num_ctx
-    return _call_llm(messages, ctx, operation="rag_chat", input_text=messages[-1].get("content", ""))
+    return _call_llm(messages, ctx, operation="rag_chat", input_text=messages[-1].get("content", ""), max_tokens=max_tokens)
 
 
 def generate_title(content: str) -> str:

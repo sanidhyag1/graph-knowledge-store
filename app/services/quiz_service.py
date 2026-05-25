@@ -391,7 +391,7 @@ async def run_generation(quiz_id: str, articles: list[ArticleInfo]) -> None:
                 parsed = []
                 current_prompt = prompt
                 for attempt_num in range(2):
-                    raw = await loop.run_in_executor(None, partial(chat, current_prompt, system, ctx_size))
+                    raw = await loop.run_in_executor(None, partial(chat, prompt=current_prompt, system=system, num_ctx=ctx_size, max_tokens=4096))
                     logger.info("LLM returned %d characters.", len(raw))
                     try:
                         parsed = _parse_and_validate(raw, attempt.quiz_type)
@@ -521,7 +521,7 @@ async def run_weak_areas_generation(quiz_id: str) -> None:
                 parsed = []
                 current_prompt = prompt
                 for attempt_num in range(2):
-                    raw = await loop.run_in_executor(None, partial(chat, current_prompt, system, ctx_size))
+                    raw = await loop.run_in_executor(None, partial(chat, prompt=current_prompt, system=system, num_ctx=ctx_size, max_tokens=4096))
                     try:
                         parsed = _parse_and_validate(raw, "mcq")
                         break
