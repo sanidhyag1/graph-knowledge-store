@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_session
 from app.models.article import Article
 from app.models.flashcard import Flashcard
+from app.models.job import BackgroundJob
 from app.services import flashcard_service
 from app.services.spaced_rep import review_card
 from app.config import settings
@@ -256,52 +257,91 @@ async def get_deck_cards(
     return cards
 
 
-@router.post("/generate/{article_id}")
+@router.post("/generate/{article_id}", status_code=202)
 async def generate_cards(
     article_id: str,
     session: AsyncSession = Depends(get_session),
 ):
-    count = await flashcard_service.regenerate_flashcards(session, uuid.UUID(article_id))
-    return {"generated": count}
+    """Queue flashcard (re)generation for an article. Returns 202 immediately."""
+    from app.services.job_worker import enqueue_job, trigger_worker
+
+    # Deduplication: don't enqueue if a job is already active for this article
+    existing = await session.execute(
+        select(BackgroundJob).where(
+            BackgroundJob.job_type == "generate_flashcards",
+            BackgroundJob.target_id == article_id,
+            BackgroundJob.status.in_(["pending", "processing"]),
+        )
+    )
+    if existing.scalar_one_or_none():
+        return {"queued": False, "message": "Generation already in progress for this article"}
+
+    await enqueue_job(session, "generate_flashcards", article_id)
+    await session.commit()
+    trigger_worker()
+    return {"queued": True, "message": "Flashcard generation queued"}
 
 
-@router.post("/generate-more/{article_id}")
+@router.post("/generate-more/{article_id}", status_code=202)
 async def generate_more_cards(
     article_id: str,
     n: int = 5,
     session: AsyncSession = Depends(get_session),
 ):
-    count = await flashcard_service.generate_flashcards_for_article(
-        session, uuid.UUID(article_id), n=n,
+    """Queue generation of N additional flashcards for an article. Returns 202 immediately."""
+    from app.services.job_worker import enqueue_job, trigger_worker
+
+    existing = await session.execute(
+        select(BackgroundJob).where(
+            BackgroundJob.job_type.in_(["generate_flashcards", "generate_flashcards_more"]),
+            BackgroundJob.target_id == article_id,
+            BackgroundJob.status.in_(["pending", "processing"]),
+        )
     )
-    return {"generated": count}
+    if existing.scalar_one_or_none():
+        return {"queued": False, "message": "Generation already in progress for this article"}
+
+    await enqueue_job(session, "generate_flashcards_more", article_id, payload={"n": n})
+    await session.commit()
+    trigger_worker()
+    return {"queued": True, "message": "Flashcard generation queued"}
 
 
-@router.post("/generate-all-missing")
+@router.post("/generate-all-missing", status_code=202)
 async def generate_all_missing(session: AsyncSession = Depends(get_session)):
+    """Queue one flashcard generation job per article that has no flashcards. Returns 202 immediately."""
+    from app.services.job_worker import enqueue_job, trigger_worker
+
     articles_with_cards = (await session.execute(
         select(Flashcard.article_id).distinct()
     )).scalars().all()
     articles_with_cards_set = {str(a) for a in articles_with_cards}
 
+    # Also skip articles that already have a pending/processing generate job
+    active_jobs = (await session.execute(
+        select(BackgroundJob.target_id).where(
+            BackgroundJob.job_type == "generate_flashcards",
+            BackgroundJob.status.in_(["pending", "processing"]),
+        )
+    )).scalars().all()
+    already_queued = {str(t) for t in active_jobs}
+
     all_articles = (await session.execute(
-        select(Article.id, Article.title, Article.content).order_by(Article.updated_at.desc())
-    )).all()
+        select(Article.id).order_by(Article.updated_at.desc())
+    )).scalars().all()
 
-    generated = 0
-    errors = 0
-    for article_id, title, content in all_articles:
-        if str(article_id) in articles_with_cards_set:
+    queued = 0
+    for article_id in all_articles:
+        aid_str = str(article_id)
+        if aid_str in articles_with_cards_set or aid_str in already_queued:
             continue
-        try:
-            count = await flashcard_service.generate_flashcards_for_article(session, article_id)
-            generated += count
-        except Exception as e:
-            errors += 1
-            import logging
-            logging.getLogger(__name__).warning("Failed to generate flashcards for %s: %s", article_id, e)
+        await enqueue_job(session, "generate_flashcards", aid_str)
+        queued += 1
 
-    return {"generated": generated, "errors": errors, "articles_processed": len(all_articles) - len(articles_with_cards_set)}
+    await session.commit()
+    if queued:
+        trigger_worker()
+    return {"queued": queued, "message": f"Queued flashcard generation for {queued} article(s)"}
 
 
 @router.get("/due-count")

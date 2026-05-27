@@ -39,7 +39,7 @@ async def list_jobs(session: AsyncSession = Depends(get_session)):
     article_ids = []
     quiz_ids = []
     for job in jobs:
-        if job.job_type == "enrich_article":
+        if job.job_type in ("enrich_article", "generate_flashcards", "generate_flashcards_more"):
             try:
                 article_ids.append(uuid.UUID(job.target_id))
             except (ValueError, TypeError):
@@ -73,6 +73,10 @@ async def list_jobs(session: AsyncSession = Depends(get_session)):
             label = article_titles.get(job.target_id, f"Article: {job.target_id}")
         elif job.job_type in ("generate_quiz", "generate_weak_areas_quiz"):
             label = quiz_labels.get(job.target_id, f"Quiz: {job.target_id}")
+        elif job.job_type in ("generate_flashcards", "generate_flashcards_more"):
+            label = article_titles.get(job.target_id, f"Article: {job.target_id}")
+        elif job.job_type == "sync_obsidian_vault":
+            label = "Obsidian Vault"
 
         response_jobs.append({
             "id": job.id,

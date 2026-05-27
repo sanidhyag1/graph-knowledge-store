@@ -342,6 +342,16 @@ export interface Job {
   completed_at: string | null;
 }
 
+export interface QueuedResponse {
+  queued: boolean;
+  message: string;
+}
+
+export interface FlashcardsQueuedResponse extends QueuedResponse {
+  queued: boolean;
+  message: string;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -520,13 +530,13 @@ export const api = {
     request<FlashcardData[]>(`/study/deck/${articleId}`),
 
   generateFlashcards: (articleId: string) =>
-    request<{ generated: number }>(`/study/generate/${articleId}`, { method: "POST" }),
+    request<QueuedResponse>(`/study/generate/${articleId}`, { method: "POST" }),
 
   generateMoreFlashcards: (articleId: string, n = 5) =>
-    request<{ generated: number }>(`/study/generate-more/${articleId}?n=${n}`, { method: "POST" }),
+    request<QueuedResponse>(`/study/generate-more/${articleId}?n=${n}`, { method: "POST" }),
 
   generateAllMissingFlashcards: () =>
-    request<{ generated: number; errors: number; articles_processed: number }>("/study/generate-all-missing", { method: "POST" }),
+    request<{ queued: number; message: string }>("/study/generate-all-missing", { method: "POST" }),
 
   getDueCount: () =>
     request<{ due_now: number; new: number }>("/study/due-count"),
@@ -546,7 +556,8 @@ export const api = {
   obsidianTracked: () => request<{ files: TrackedFile[] }>("/obsidian/tracked"),
   obsidianTrack: (paths: string[]) => request<{ tracked: number }>("/obsidian/track", { method: "POST", body: JSON.stringify({ paths }) }),
   obsidianUntrack: (paths: string[]) => request<{ untracked: number }>("/obsidian/untrack", { method: "POST", body: JSON.stringify({ paths }) }),
-  obsidianSync: () => request<{ synced: number; errors: number; missing: number }>("/obsidian/sync", { method: "POST" }),
+  obsidianSync: () =>
+    request<QueuedResponse>("/obsidian/sync", { method: "POST" }),
   obsidianUpdateSettings: (data: { attachment_path: string }) => request<{ attachment_path: string }>("/obsidian/settings", { method: "POST", body: JSON.stringify(data) }),
 
   uploadImage: async (file: File): Promise<{ url: string }> => {

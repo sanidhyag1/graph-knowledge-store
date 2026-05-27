@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useSnackbar } from "notistack";
-import { api, type FlashcardData, type DeckInfo, type StudyStats } from "../api/client";
+import { api, type FlashcardData, type DeckInfo, type StudyStats, type Job } from "../api/client";
 import LatexText from "../components/LatexText";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
@@ -64,14 +64,30 @@ export default function StudyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [generatingAll, setGeneratingAll] = useState(false);
   const [generatingDeck, setGeneratingDeck] = useState<string | null>(null);
+  const [activeFlashcardJobs, setActiveFlashcardJobs] = useState<Set<string>>(new Set());
   const { enqueueSnackbar } = useSnackbar();
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, d] = await Promise.all([api.getStudyStats(), api.getDecks()]);
+      const [s, d, jobs] = await Promise.all([
+        api.getStudyStats(),
+        api.getDecks(),
+        api.listJobs(),
+      ]);
       setStats(s);
       setDecks(d);
+      // Compute which articles have an active flashcard job
+      const active = new Set<string>();
+      for (const job of jobs as Job[]) {
+        if (
+          (job.job_type === "generate_flashcards" || job.job_type === "generate_flashcards_more") &&
+          (job.status === "pending" || job.status === "processing")
+        ) {
+          active.add(job.target_id);
+        }
+      }
+      setActiveFlashcardJobs(active);
     } catch {
       enqueueSnackbar("Failed to load study data", { variant: "error" });
     }
@@ -134,10 +150,17 @@ export default function StudyPage() {
     setGeneratingAll(true);
     try {
       const res = await api.generateAllMissingFlashcards();
-      enqueueSnackbar(`Generated ${res.generated} flashcards across ${res.articles_processed} articles`, { variant: "success", autoHideDuration: 5000 });
+      if (res.queued > 0) {
+        enqueueSnackbar(
+          `Queued flashcard generation for ${res.queued} article(s) — check the background jobs panel`,
+          { variant: "info", autoHideDuration: 6000 }
+        );
+      } else {
+        enqueueSnackbar("All articles already have flashcards or jobs in progress", { variant: "success" });
+      }
       loadData();
     } catch {
-      enqueueSnackbar("Failed to generate flashcards", { variant: "error" });
+      enqueueSnackbar("Failed to queue flashcard generation", { variant: "error" });
     }
     setGeneratingAll(false);
   }
@@ -146,10 +169,16 @@ export default function StudyPage() {
     setGeneratingDeck(articleId);
     try {
       const res = await api.generateFlashcards(articleId);
-      enqueueSnackbar(`Generated ${res.generated} flashcards`, { variant: "success" });
+      if (res.queued) {
+        enqueueSnackbar("Flashcard generation queued — check the background jobs panel", { variant: "info" });
+        // Optimistically mark this article as having an active job
+        setActiveFlashcardJobs((prev) => new Set([...prev, articleId]));
+      } else {
+        enqueueSnackbar(res.message, { variant: "warning" });
+      }
       loadData();
     } catch {
-      enqueueSnackbar("Failed to generate flashcards", { variant: "error" });
+      enqueueSnackbar("Failed to queue flashcard generation", { variant: "error" });
     }
     setGeneratingDeck(null);
   }
@@ -412,7 +441,7 @@ export default function StudyPage() {
             onClick={handleGenerateAll}
             disabled={generatingAll}
           >
-            {generatingAll ? "Generating..." : "Generate All Missing"}
+            {generatingAll ? "Queuing..." : "Generate All Missing"}
           </Button>
         )}
       </Box>
@@ -461,15 +490,32 @@ export default function StudyPage() {
             </Box>
             <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
               {deck.total === 0 ? (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  disabled={generatingDeck === deck.article_id}
-                  startIcon={generatingDeck === deck.article_id ? <CircularProgress size={14} /> : <SchoolOutlinedIcon />}
-                  onClick={() => handleGenerateDeck(deck.article_id)}
-                >
-                  {generatingDeck === deck.article_id ? "Generating..." : "Generate"}
-                </Button>
+                <>
+                  {activeFlashcardJobs.has(deck.article_id) ? (
+                    <Tooltip title="Generation in progress — check the background jobs panel" arrow>
+                      <span>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          disabled
+                          startIcon={<CircularProgress size={14} />}
+                        >
+                          In Progress...
+                        </Button>
+                      </span>
+                    </Tooltip>
+                  ) : (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      disabled={generatingDeck === deck.article_id}
+                      startIcon={generatingDeck === deck.article_id ? <CircularProgress size={14} /> : <SchoolOutlinedIcon />}
+                      onClick={() => handleGenerateDeck(deck.article_id)}
+                    >
+                      {generatingDeck === deck.article_id ? "Queuing..." : "Generate"}
+                    </Button>
+                  )}
+                </>
               ) : deck.due_now > 0 ? (
                 <Button variant="contained" size="small" onClick={() => startDeckStudy(deck.article_id)}>
                   Study ({deck.due_now} due)
@@ -484,14 +530,17 @@ export default function StudyPage() {
                 </Typography>
               )}
               {deck.total > 0 && (
-                <Tooltip title="Regenerate flashcards">
-                  <IconButton
-                    size="small"
-                    onClick={() => handleGenerateDeck(deck.article_id)}
-                    sx={{ color: "text.disabled", "&:hover": { color: "primary.main" } }}
-                  >
-                    <RefreshOutlinedIcon fontSize="small" />
-                  </IconButton>
+                <Tooltip title={activeFlashcardJobs.has(deck.article_id) ? "Generation in progress" : "Regenerate flashcards"}>
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleGenerateDeck(deck.article_id)}
+                      disabled={activeFlashcardJobs.has(deck.article_id)}
+                      sx={{ color: activeFlashcardJobs.has(deck.article_id) ? "text.disabled" : "text.disabled", "&:hover": { color: activeFlashcardJobs.has(deck.article_id) ? "text.disabled" : "primary.main" } }}
+                    >
+                      {activeFlashcardJobs.has(deck.article_id) ? <CircularProgress size={16} /> : <RefreshOutlinedIcon fontSize="small" />}
+                    </IconButton>
+                  </span>
                 </Tooltip>
               )}
             </Box>

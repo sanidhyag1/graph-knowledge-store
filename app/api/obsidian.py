@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_session
 from app.services import obsidian_service
-from app.services.obsidian_sync import get_last_sync_time, run_sync
+from app.services.obsidian_sync import get_last_sync_time
 
 router = APIRouter(prefix="/api/obsidian", tags=["obsidian"])
 
@@ -81,12 +81,29 @@ async def untrack_files(
     return {"untracked": count}
 
 
-@router.post("/sync")
-async def trigger_sync():
+@router.post("/sync", status_code=202)
+async def trigger_sync(session: AsyncSession = Depends(get_session)):
     if not settings.obsidian_vault_path:
         raise HTTPException(status_code=400, detail="Obsidian vault path not configured")
-    result = await run_sync()
-    return result
+
+    from app.models.job import BackgroundJob
+    from sqlalchemy import select
+
+    # Deduplication: don't enqueue if a sync is already pending/processing
+    existing = await session.execute(
+        select(BackgroundJob).where(
+            BackgroundJob.job_type == "sync_obsidian_vault",
+            BackgroundJob.status.in_(["pending", "processing"]),
+        )
+    )
+    if existing.scalar_one_or_none():
+        return {"queued": False, "message": "Obsidian sync already in progress"}
+
+    from app.services.job_worker import enqueue_job, trigger_worker
+    await enqueue_job(session, "sync_obsidian_vault", "global")
+    await session.commit()
+    trigger_worker()
+    return {"queued": True, "message": "Obsidian vault sync queued"}
 
 
 @router.get("/image")

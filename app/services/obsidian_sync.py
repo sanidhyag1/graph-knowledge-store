@@ -30,9 +30,28 @@ async def _sync_loop():
     while True:
         await asyncio.sleep(interval)
         try:
-            await run_sync()
+            # Route periodic syncs through the queue for visibility and error tracking
+            from app.models.job import BackgroundJob
+            from sqlalchemy import select
+
+            async with async_session_factory() as session:
+                # Only enqueue if no sync is already pending/processing
+                existing = await session.execute(
+                    select(BackgroundJob).where(
+                        BackgroundJob.job_type == "sync_obsidian_vault",
+                        BackgroundJob.status.in_(["pending", "processing"]),
+                    )
+                )
+                if not existing.scalar_one_or_none():
+                    from app.services.job_worker import enqueue_job, trigger_worker
+                    await enqueue_job(session, "sync_obsidian_vault", "global")
+                    await session.commit()
+                    trigger_worker()
+                    logger.info("Scheduled Obsidian sync enqueued via background queue.")
+                else:
+                    logger.info("Scheduled Obsidian sync skipped — a sync job is already active.")
         except Exception as e:
-            logger.error(f"Obsidian sync error: {e}")
+            logger.error(f"Obsidian scheduled sync error: {e}")
 
 
 def start_scheduler():

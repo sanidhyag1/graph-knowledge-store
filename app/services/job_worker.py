@@ -48,6 +48,7 @@ async def _process_job(job_id: uuid.UUID):
 
         job_type = job.job_type
         target_id = job.target_id
+        payload = job.payload or {}
 
     logger.info("Starting background job %s of type %s on target %s", job_id, job_type, target_id)
 
@@ -72,6 +73,23 @@ async def _process_job(job_id: uuid.UUID):
         elif job_type == "generate_weak_areas_quiz":
             from app.services.quiz_service import run_weak_areas_generation
             await run_weak_areas_generation(target_id)
+
+        elif job_type == "generate_flashcards":
+            from app.services.flashcard_service import regenerate_flashcards
+            from app.database import async_session_factory
+            async with async_session_factory() as session:
+                await regenerate_flashcards(session, uuid.UUID(target_id))
+
+        elif job_type == "generate_flashcards_more":
+            from app.services.flashcard_service import generate_flashcards_for_article
+            from app.database import async_session_factory
+            async with async_session_factory() as session:
+                n = payload.get("n", 5)
+                await generate_flashcards_for_article(session, uuid.UUID(target_id), n=n)
+
+        elif job_type == "sync_obsidian_vault":
+            from app.services.obsidian_sync import run_sync
+            await run_sync()
 
         else:
             raise ValueError(f"Unknown job type: {job_type}")

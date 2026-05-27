@@ -148,16 +148,17 @@ export default function ObsidianPage() {
     setSyncing(true);
     try {
       const res = await api.obsidianSync();
-      const parts: string[] = [];
-      if (res.synced) parts.push(`${res.synced} synced`);
-      if (res.errors) parts.push(`${res.errors} errors`);
-      if (res.missing) parts.push(`${res.missing} missing`);
-      enqueueSnackbar(parts.length ? parts.join(", ") : "Everything up to date", {
-        variant: res.errors ? "warning" : "success",
-      });
-      await Promise.all([loadTracked(), loadStatus()]);
+      if (res.queued) {
+        enqueueSnackbar("Vault sync queued — check the background jobs panel for progress", {
+          variant: "info",
+          autoHideDuration: 6000,
+        });
+      } else {
+        // Already in progress
+        enqueueSnackbar(res.message, { variant: "warning" });
+      }
     } catch {
-      enqueueSnackbar("Sync failed", { variant: "error" });
+      enqueueSnackbar("Failed to queue vault sync", { variant: "error" });
     }
     setSyncing(false);
   }

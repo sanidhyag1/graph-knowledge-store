@@ -71,6 +71,12 @@ export default function SystemQueueDrawer({ open, onClose }: SystemQueueDrawerPr
         return "Generate Quiz";
       case "generate_weak_areas_quiz":
         return "Weak Areas Quiz";
+      case "generate_flashcards":
+        return "Generate Flashcards";
+      case "generate_flashcards_more":
+        return "Generate More Flashcards";
+      case "sync_obsidian_vault":
+        return "Obsidian Vault Sync";
       default:
         return type;
     }
