@@ -50,7 +50,10 @@ async def generate_quiz(
     await session.refresh(attempt)
 
     quiz_id = attempt.id
-    asyncio.create_task(quiz_service.run_generation(quiz_id, articles))
+    from app.services.job_worker import enqueue_job, trigger_worker
+    await enqueue_job(session, "generate_quiz", quiz_id)
+    await session.commit()
+    trigger_worker()
 
     return QuizGenerateResponse(quiz_id=quiz_id, status="generating")
 
@@ -81,7 +84,10 @@ async def generate_article_quiz(
     await session.refresh(attempt)
 
     quiz_id = attempt.id
-    asyncio.create_task(quiz_service.run_generation(quiz_id, articles))
+    from app.services.job_worker import enqueue_job, trigger_worker
+    await enqueue_job(session, "generate_quiz", quiz_id)
+    await session.commit()
+    trigger_worker()
 
     return QuizGenerateResponse(quiz_id=quiz_id, status="generating")
 
@@ -119,7 +125,10 @@ async def generate_weak_areas_quiz(
     await session.refresh(attempt)
 
     quiz_id = attempt.id
-    asyncio.create_task(quiz_service.run_weak_areas_generation(quiz_id))
+    from app.services.job_worker import enqueue_job, trigger_worker
+    await enqueue_job(session, "generate_weak_areas_quiz", quiz_id)
+    await session.commit()
+    trigger_worker()
 
     return QuizGenerateResponse(quiz_id=quiz_id, status="generating")
 

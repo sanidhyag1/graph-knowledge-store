@@ -28,8 +28,10 @@ import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
 import ChevronLeftOutlinedIcon from "@mui/icons-material/ChevronLeftOutlined";
 import ChevronRightOutlinedIcon from "@mui/icons-material/ChevronRightOutlined";
+import PendingActionsOutlinedIcon from "@mui/icons-material/PendingActionsOutlined";
 import ScrollButtons from "./ScrollButtons";
 import { useThemeMode } from "./MaterialThemeProvider";
+import SystemQueueDrawer from "./SystemQueueDrawer";
 
 const ACTIVE_QUIZ_KEY = "active-quiz-id";
 
@@ -56,6 +58,8 @@ export default function Layout() {
   });
   const [quizGenerating, setQuizGenerating] = useState(false);
   const [studyDue, setStudyDue] = useState(0);
+  const [queueOpen, setQueueOpen] = useState(false);
+  const [activeJobsCount, setActiveJobsCount] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const notifiedRef = useRef<string | null>(null);
   const location = useLocation();
@@ -136,6 +140,27 @@ export default function Layout() {
   useEffect(() => {
     api.getDueCount().then((res) => setStudyDue(res.due_now + res.new)).catch(() => {});
   }, [location.pathname]);
+
+  // Poll for background jobs count
+  useEffect(() => {
+    let active = true;
+    async function updateActiveJobs() {
+      try {
+        const jobs = await api.listJobs();
+        if (!active) return;
+        const count = jobs.filter(j => j.status === "pending" || j.status === "processing").length;
+        setActiveJobsCount(count);
+      } catch (err) {
+        console.error("Failed to fetch active jobs count:", err);
+      }
+    }
+    updateActiveJobs();
+    const interval = setInterval(updateActiveJobs, 5000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
@@ -224,7 +249,14 @@ export default function Layout() {
         </List>
 
         {!collapsed && (
-          <Box sx={{ mt: "auto", px: 1.5, pb: 2, display: "flex", justifyContent: "center" }}>
+          <Box sx={{ mt: "auto", px: 1.5, pb: 2, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+            <Tooltip title="System background jobs queue" arrow>
+              <IconButton size="small" onClick={() => setQueueOpen(true)} sx={{ color: "text.secondary" }}>
+                <Badge badgeContent={activeJobsCount} color="primary" sx={{ "& .MuiBadge-badge": { fontSize: "0.7rem", height: 16, minWidth: 16 } }}>
+                  <PendingActionsOutlinedIcon fontSize="small" />
+                </Badge>
+              </IconButton>
+            </Tooltip>
             <Tooltip title={dark ? "Switch to light mode" : "Switch to dark mode"} arrow>
               <IconButton size="small" onClick={toggleTheme} sx={{ color: "text.secondary" }}>
                 {dark ? <LightModeOutlinedIcon fontSize="small" /> : <DarkModeOutlinedIcon fontSize="small" />}
@@ -234,7 +266,14 @@ export default function Layout() {
         )}
 
         {collapsed && (
-          <Box sx={{ mt: "auto", px: 1.5, pb: 2, display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
+          <Box sx={{ mt: "auto", px: 1.5, pb: 2, display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5 }}>
+            <Tooltip title="System background jobs queue" arrow placement="right">
+              <IconButton size="small" onClick={() => setQueueOpen(true)} sx={{ color: "text.secondary" }}>
+                <Badge badgeContent={activeJobsCount} color="primary" sx={{ "& .MuiBadge-badge": { fontSize: "0.7rem", height: 16, minWidth: 16 } }}>
+                  <PendingActionsOutlinedIcon fontSize="small" />
+                </Badge>
+              </IconButton>
+            </Tooltip>
             <Tooltip title={dark ? "Switch to light mode" : "Switch to dark mode"} arrow placement="right">
               <IconButton size="small" onClick={toggleTheme} sx={{ color: "text.secondary" }}>
                 {dark ? <LightModeOutlinedIcon fontSize="small" /> : <DarkModeOutlinedIcon fontSize="small" />}
@@ -249,6 +288,7 @@ export default function Layout() {
         </Box>
       </Box>
       <ScrollButtons />
+      <SystemQueueDrawer open={queueOpen} onClose={() => setQueueOpen(false)} />
     </Box>
   );
 }

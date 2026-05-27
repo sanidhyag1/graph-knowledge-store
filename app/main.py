@@ -23,8 +23,13 @@ async def lifespan(app: FastAPI):
     from app.services.obsidian_sync import start_scheduler, stop_scheduler
     start_scheduler()
 
+    # Start background job worker queue
+    from app.services.job_worker import start_worker, stop_worker
+    start_worker()
+
     yield
 
+    stop_worker()
     stop_scheduler()
 
     try:

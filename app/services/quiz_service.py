@@ -348,7 +348,35 @@ def _is_duplicate(new_q: dict, existing: list[dict], quiz_type: str) -> bool:
     return False
 
 
-async def run_generation(quiz_id: str, articles: list[ArticleInfo]) -> None:
+async def fetch_articles_by_ids(session: AsyncSession, ids: list[str]) -> list[ArticleInfo]:
+    import uuid
+    uuid_objs = []
+    for uid_str in ids:
+        try:
+            uuid_objs.append(uuid.UUID(uid_str))
+        except (ValueError, TypeError):
+            continue
+    if not uuid_objs:
+        return []
+    stmt = select(
+        Article.id, Article.title, Article.summary, Article.topics, Article.keywords, Article.content,
+    ).where(Article.id.in_(uuid_objs))
+    result = await session.execute(stmt)
+    rows = result.all()
+    articles = []
+    for id_val, title, summary, topics_list, keywords_list, content in rows:
+        articles.append(ArticleInfo(
+            id=id_val,
+            title=title,
+            summary=summary,
+            topics=topics_list or [],
+            keywords=keywords_list or [],
+            content=content,
+        ))
+    return articles
+
+
+async def run_generation(quiz_id: str, articles: list[ArticleInfo] = None) -> None:
     loop = asyncio.get_event_loop()
     async with async_session_factory() as session:
         result = await session.execute(select(QuizAttempt).where(QuizAttempt.id == quiz_id))
@@ -358,6 +386,22 @@ async def run_generation(quiz_id: str, articles: list[ArticleInfo]) -> None:
             return
 
         try:
+            if not articles:
+                article_ids = [sa["id"] for sa in (attempt.source_articles or [])]
+                if not article_ids:
+                    logger.error("No source articles in QuizAttempt %s", quiz_id)
+                    attempt.status = "failed"
+                    attempt.error = "No source articles specified for quiz generation."
+                    await session.commit()
+                    return
+                articles = await fetch_articles_by_ids(session, article_ids)
+                if not articles:
+                    logger.error("Could not load any source articles for QuizAttempt %s", quiz_id)
+                    attempt.status = "failed"
+                    attempt.error = "Could not load any source articles for the quiz."
+                    await session.commit()
+                    return
+
             questions: list[dict] = list(attempt.questions) if attempt.questions else []
 
             use_llm_assessment = len(articles) == 1 and attempt.num_questions >= 10

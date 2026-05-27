@@ -11,6 +11,7 @@ from app.api.flashcards import router as flashcards_router
 from app.api.llm import router as llm_router
 from app.api.obsidian import router as obsidian_router
 from app.api.uploads import router as uploads_router
+from app.api.jobs import router as jobs_router
 
 router = APIRouter()
 router.include_router(articles_router)
@@ -24,3 +25,4 @@ router.include_router(flashcards_router)
 router.include_router(llm_router)
 router.include_router(obsidian_router)
 router.include_router(uploads_router)
+router.include_router(jobs_router)

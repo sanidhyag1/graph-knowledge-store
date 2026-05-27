@@ -315,12 +315,13 @@ async def track_files(
 
         to_enrich.append((article.id, article.title, article.content))
 
-    await session.commit()
-    
-    import asyncio
+    from app.services.job_worker import enqueue_job, trigger_worker
     for aid, title, content in to_enrich:
-        asyncio.create_task(_enrich_article(aid, title, content))
+        await enqueue_job(session, "enrich_article", str(aid))
 
+    await session.commit()
+    if to_enrich:
+        trigger_worker()
     return tracked_count
 
 
@@ -395,11 +396,13 @@ async def sync_tracked_files(session: AsyncSession) -> dict:
             logger.error(f"Error syncing {tf.relative_path}: {e}")
             errors += 1
 
-    await session.commit()
-
-    import asyncio
+    from app.services.job_worker import enqueue_job, trigger_worker
     for aid, title, content in to_enrich:
-        asyncio.create_task(_enrich_article(aid, title, content))
+        await enqueue_job(session, "enrich_article", str(aid))
+
+    await session.commit()
+    if to_enrich:
+        trigger_worker()
 
     logger.info(f"Obsidian sync complete: {synced} synced, {errors} errors, {missing} missing")
     return {"synced": synced, "errors": errors, "missing": missing}

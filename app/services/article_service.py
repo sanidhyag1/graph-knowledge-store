@@ -39,7 +39,10 @@ async def create_article(
     await session.commit()
     await session.refresh(article)
 
-    background_tasks.add_task(_enrich_article, article.id, article.title, article.content)
+    from app.services.job_worker import enqueue_job, trigger_worker
+    await enqueue_job(session, "enrich_article", str(article.id))
+    await session.commit()
+    trigger_worker()
     return article
 
 
@@ -121,7 +124,12 @@ async def update_article(
     await session.refresh(article)
 
     if re_enrich:
-        background_tasks.add_task(_enrich_article, article.id, article.title, article.content)
+        article.enrichment_status = "pending"
+        await session.commit()
+        from app.services.job_worker import enqueue_job, trigger_worker
+        await enqueue_job(session, "enrich_article", str(article.id))
+        await session.commit()
+        trigger_worker()
 
     return article
 

@@ -329,6 +329,19 @@ export interface ObsidianStatus {
   attachment_path: string;
 }
 
+export interface Job {
+  id: string;
+  job_type: string;
+  target_id: string;
+  target_label?: string | null;
+  payload: Record<string, any> | null;
+  status: "pending" | "processing" | "completed" | "failed";
+  error: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -543,4 +556,8 @@ export const api = {
     if (!res.ok) throw new Error("Upload failed");
     return res.json();
   },
+
+  // Background Jobs Queue
+  listJobs: () => request<Job[]>("/jobs"),
+  cancelJob: (id: string) => request<void>(`/jobs/${id}`, { method: "DELETE" }),
 };
