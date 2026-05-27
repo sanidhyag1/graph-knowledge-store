@@ -268,6 +268,8 @@ export interface LLMCallLog {
   error_message: string | null;
   input_chars: number | null;
   output_chars: number | null;
+  input_text: string | null;
+  output_text: string | null;
   num_ctx: number | null;
   temperature: number | null;
   article_id: string | null;
@@ -407,7 +409,7 @@ export const api = {
 
   getGraphStats: () => request<GraphStats>("/graph/stats"),
 
-  generateQuiz: (data: { topics?: string[]; keywords?: string[]; quiz_type: QuizType; num_questions: number }) =>
+  generateQuiz: (data: { topics?: string[]; keywords?: string[]; quiz_type: QuizType; num_questions: number; all_articles?: boolean; article_ids?: string[] }) =>
     request<QuizGenerateResponse>("/quiz/generate", { method: "POST", body: JSON.stringify(data) }),
 
   generateArticleQuiz: (articleId: string, data: { quiz_type: QuizType; num_questions: number }) =>
@@ -442,6 +444,9 @@ export const api = {
 
   deleteAllQuizzes: () =>
     request<{ deleted: number }>("/quiz/delete/all", { method: "DELETE" }),
+
+  retakeQuiz: (quizId: string) =>
+    request<QuizGenerateResponse>(`/quiz/${quizId}/retake`, { method: "POST" }),
 
   getLLMStats: (fromDate?: string, toDate?: string) => {
     let path = "/llm-logs/stats";

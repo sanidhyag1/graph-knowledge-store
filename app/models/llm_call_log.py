@@ -21,6 +21,8 @@ class LLMCallLog(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     input_chars: Mapped[int | None] = mapped_column(Integer)
     output_chars: Mapped[int | None] = mapped_column(Integer)
+    input_text: Mapped[str | None] = mapped_column(Text)
+    output_text: Mapped[str | None] = mapped_column(Text)
     num_ctx: Mapped[int | None] = mapped_column(Integer)
     temperature: Mapped[float | None] = mapped_column(Float)
     article_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("articles.id", ondelete="SET NULL"))

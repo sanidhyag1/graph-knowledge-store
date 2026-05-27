@@ -7,6 +7,7 @@ import {
   type QuizResponse,
   type QuizType,
   type QuizHistoryItem,
+  type ArticleIndexItem,
 } from "../api/client";
 import QuizRunner, { type QuizAnswer } from "../components/QuizRunner";
 import Typography from "@mui/material/Typography";
@@ -37,6 +38,11 @@ import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import SchoolOutlinedIcon from "@mui/icons-material/SchoolOutlined";
 import DeleteSweepOutlinedIcon from "@mui/icons-material/DeleteSweepOutlined";
 import DoneAllOutlinedIcon from "@mui/icons-material/DoneAllOutlined";
+import Autocomplete from "@mui/material/Autocomplete";
+import Radio from "@mui/material/Radio";
+import RadioGroup from "@mui/material/RadioGroup";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import ReplayOutlinedIcon from "@mui/icons-material/ReplayOutlined";
 
 const POLL_INTERVAL_MS = 3000;
 const ACTIVE_QUIZ_KEY = "active-quiz-id";
@@ -189,6 +195,9 @@ export default function QuizPage() {
     (searchParams.get("keyword") ? [searchParams.get("keyword")!] : []);
 
   const [tab, setTab] = useState(0);
+  const [sourceType, setSourceType] = useState<"tags" | "articles">("tags");
+  const [allArticles, setAllArticles] = useState<ArticleIndexItem[]>([]);
+  const [selectedArticles, setSelectedArticles] = useState<ArticleIndexItem[]>([]);
   const [selectedTopics, setSelectedTopics] = useState<string[]>(initialTopics);
   const [selectedKeywords, setSelectedKeywords] = useState<string[]>(initialKeywords);
   const [quizType, setQuizType] = useState<QuizType>("mcq");
@@ -217,6 +226,7 @@ export default function QuizPage() {
 
   useEffect(() => {
     api.getArticlesIndex().then((data) => {
+      setAllArticles(data.articles);
       const topicSet = new Set<string>();
       const keywordSet = new Set<string>();
       for (const a of data.articles) {
@@ -296,8 +306,12 @@ export default function QuizPage() {
   }, [startPolling]);
 
   async function handleGenerate() {
-    if (!selectedTopics.length && !selectedKeywords.length) {
+    if (sourceType === "tags" && !selectedTopics.length && !selectedKeywords.length) {
       setError("Select at least one topic or keyword");
+      return;
+    }
+    if (sourceType === "articles" && !selectedArticles.length) {
+      setError("Select at least one article");
       return;
     }
     setError("");
@@ -310,8 +324,9 @@ export default function QuizPage() {
 
     try {
       const res = await api.generateQuiz({
-        topics: selectedTopics,
-        keywords: selectedKeywords,
+        topics: sourceType === "tags" ? selectedTopics : [],
+        keywords: sourceType === "tags" ? selectedKeywords : [],
+        article_ids: sourceType === "articles" ? selectedArticles.map(a => a.id) : [],
         quiz_type: quizType,
         num_questions: numQuestions,
       });
@@ -375,6 +390,22 @@ export default function QuizPage() {
       setQuiz(null);
     } catch {
       enqueueSnackbar("Failed to load quiz", { variant: "error" });
+    }
+  }
+
+  async function handleRetake(item: QuizHistoryItem, e: React.MouseEvent) {
+    e.stopPropagation();
+    try {
+      const res = await api.retakeQuiz(item.quiz_id);
+      setQuizId(res.quiz_id);
+      setStatus(res.status);
+      setProgress(0);
+      setTotal(item.num_questions);
+      localStorage.setItem(ACTIVE_QUIZ_KEY, res.quiz_id);
+      startPolling(res.quiz_id);
+      setTab(0);
+    } catch {
+      enqueueSnackbar("Failed to retake quiz", { variant: "error" });
     }
   }
 
@@ -483,7 +514,7 @@ export default function QuizPage() {
       <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
         <Tabs value={tab} onChange={(_, v) => setTab(v)}>
           <Tab icon={<QuizOutlinedIcon />} iconPosition="start" label="New Quiz" />
-          <Tab icon={<HistoryOutlinedIcon />} iconPosition="start" label={`History${history.length ? ` (${history.length})` : ""}`} />
+          <Tab icon={<HistoryOutlinedIcon />} iconPosition="start" label={`Available Quizzes & History${history.length ? ` (${history.length})` : ""}`} />
         </Tabs>
       </Box>
 
@@ -513,16 +544,55 @@ export default function QuizPage() {
 
           <Paper sx={{ p: 3, borderRadius: 3, mb: 3 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
-              Select topics and keywords
+              Quiz Source
             </Typography>
-            <Box sx={{ mb: 3 }}>
-              <ChipInput label="Topics" available={topics} selected={selectedTopics} onChange={setSelectedTopics} />
-            </Box>
-            <ChipInput label="Keywords" available={keywords} selected={selectedKeywords} onChange={setSelectedKeywords} />
-            {!selectedTopics.length && !selectedKeywords.length && !indexLoading && (
-              <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 1.5 }}>
-                Select at least one topic or keyword to generate a quiz
-              </Typography>
+            <RadioGroup
+              row
+              value={sourceType}
+              onChange={(e) => setSourceType(e.target.value as any)}
+              sx={{ mb: 2 }}
+            >
+              <FormControlLabel value="tags" control={<Radio size="small" />} label={<Typography variant="body2">Topics & Keywords</Typography>} />
+              <FormControlLabel value="articles" control={<Radio size="small" />} label={<Typography variant="body2">Select Articles</Typography>} />
+            </RadioGroup>
+
+            {sourceType === "tags" && (
+              <>
+                <Box sx={{ mb: 3 }}>
+                  <ChipInput label="Topics" available={topics} selected={selectedTopics} onChange={setSelectedTopics} />
+                </Box>
+                <ChipInput label="Keywords" available={keywords} selected={selectedKeywords} onChange={setSelectedKeywords} />
+                {!selectedTopics.length && !selectedKeywords.length && !indexLoading && (
+                  <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 1.5 }}>
+                    Select at least one topic or keyword to generate a quiz
+                  </Typography>
+                )}
+              </>
+            )}
+
+            {sourceType === "articles" && (
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  Select Articles
+                </Typography>
+                <Autocomplete
+                  multiple
+                  options={allArticles}
+                  getOptionLabel={(option) => option.title}
+                  value={selectedArticles}
+                  onChange={(_, newValue) => setSelectedArticles(newValue)}
+                  isOptionEqualToValue={(option, value) => option.id === value.id}
+                  renderInput={(params) => (
+                    <TextField {...params} size="small" placeholder="Search articles..." />
+                  )}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => {
+                      const { key, ...tagProps } = getTagProps({ index });
+                      return <Chip variant="outlined" label={option.title} size="small" key={key} {...tagProps} />;
+                    })
+                  }
+                />
+              </Box>
             )}
           </Paper>
 
@@ -571,7 +641,7 @@ export default function QuizPage() {
             fullWidth
             startIcon={isGenerating ? <CircularProgress size={18} color="inherit" /> : <QuizOutlinedIcon />}
             onClick={handleGenerate}
-            disabled={isGenerating || (!selectedTopics.length && !selectedKeywords.length)}
+            disabled={isGenerating || (sourceType === "tags" && !selectedTopics.length && !selectedKeywords.length) || (sourceType === "articles" && !selectedArticles.length)}
             sx={{ py: 1.5, borderRadius: 2, mb: 1.5 }}
           >
             {isGenerating ? `Generating (${progress}/${total})...` : "Generate Quiz"}
@@ -725,6 +795,15 @@ export default function QuizPage() {
                                 {formatDate(item.created_at)}
                               </Typography>
                             </Box>
+                            <IconButton
+                              size="small"
+                              onClick={(e) => handleRetake(item, e)}
+                              sx={{ color: "primary.main", "&:hover": { color: "primary.dark", bgcolor: "primary.light", opacity: 0.2 } }}
+                            >
+                              <Tooltip title="Retake Quiz">
+                                <ReplayOutlinedIcon fontSize="small" />
+                              </Tooltip>
+                            </IconButton>
                             <IconButton
                               size="small"
                               onClick={(e) => { e.stopPropagation(); setDeleteTarget(item); }}

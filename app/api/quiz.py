@@ -27,10 +27,16 @@ async def generate_quiz(
     req: QuizGenerateRequest,
     session: AsyncSession = Depends(get_session),
 ):
-    if not req.topics and not req.keywords:
-        raise HTTPException(status_code=400, detail="Provide at least one topic or keyword")
+    if not req.all_articles and not req.article_ids and not req.topics and not req.keywords:
+        raise HTTPException(status_code=400, detail="Provide at least one topic, keyword, or article ID, or select all articles")
 
-    articles = await quiz_service.fetch_articles(session, topics=req.topics, keywords=req.keywords)
+    if req.article_ids:
+        articles = await quiz_service.fetch_articles_by_ids(session, ids=req.article_ids)
+    elif req.all_articles:
+        articles = await quiz_service.fetch_articles(session)
+    else:
+        articles = await quiz_service.fetch_articles(session, topics=req.topics, keywords=req.keywords)
+
     if not articles:
         raise HTTPException(status_code=404, detail="No articles found for the given filters")
 
@@ -69,15 +75,24 @@ async def generate_article_quiz(
         raise HTTPException(status_code=404, detail="Article not found")
 
     articles = [article]
+    if req.include_related and (article.topics or article.keywords):
+        related = await quiz_service.fetch_articles(session, topics=article.topics, keywords=article.keywords)
+        seen_ids = {article.id}
+        for rel in related:
+            if rel.id not in seen_ids:
+                articles.append(rel)
+                seen_ids.add(rel.id)
+                if len(articles) >= 10:
+                    break
 
     attempt = QuizAttempt(
         quiz_type=req.quiz_type,
         topics=article.topics,
         keywords=article.keywords,
         num_questions=10,
-        article_count=1,
+        article_count=len(articles),
         status="generating",
-        source_articles=[{"id": article.id, "title": article.title}],
+        source_articles=[{"id": a.id, "title": a.title} for a in articles],
     )
     session.add(attempt)
     await session.commit()
@@ -259,6 +274,14 @@ async def submit_quiz(
         raise HTTPException(status_code=404, detail="Quiz not found")
 
     return _attempt_to_response(attempt)
+
+
+@router.post("/{quiz_id}/retake", response_model=QuizGenerateResponse)
+async def retake_quiz(quiz_id: str, session: AsyncSession = Depends(get_session)):
+    new_quiz_id = await quiz_service.retake_quiz(session, quiz_id)
+    if not new_quiz_id:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    return QuizGenerateResponse(quiz_id=new_quiz_id, status="ready")
 
 
 def _attempt_to_response(a: QuizAttempt) -> QuizResponse:

@@ -19,8 +19,12 @@ import CheckCircleOutlineOutlinedIcon from "@mui/icons-material/CheckCircleOutli
 import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import TimerOutlinedIcon from "@mui/icons-material/TimerOutlined";
 import TokenOutlinedIcon from "@mui/icons-material/TokenOutlined";
+import IconButton from "@mui/material/IconButton";
+import Collapse from "@mui/material/Collapse";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import { api } from "../api/client";
-import type { LLMStatsResponse, LLMCallLogListResponse } from "../api/client";
+import type { LLMStatsResponse, LLMCallLogListResponse, LLMCallLog } from "../api/client";
 
 function StatCard({ title, value, subtitle, icon, color }: { title: string; value: string | number; subtitle?: string; icon: React.ReactNode; color: string }) {
   return (
@@ -50,6 +54,72 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
+function LogTableRow({ log }: { log: LLMCallLog }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <TableRow sx={{ '& > *': { borderBottom: 'unset' } }}>
+        <TableCell>
+          <IconButton
+            aria-label="expand row"
+            size="small"
+            onClick={() => setOpen(!open)}
+          >
+            {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+          </IconButton>
+        </TableCell>
+        <TableCell sx={{ whiteSpace: "nowrap" }}>{new Date(log.created_at).toLocaleString()}</TableCell>
+        <TableCell><Chip label={log.operation} size="small" variant="outlined" /></TableCell>
+        <TableCell sx={{ fontSize: "0.8rem" }}>{log.model}</TableCell>
+        <TableCell align="right">{formatMs(log.latency_ms)}</TableCell>
+        <TableCell align="right">{log.total_tokens ?? "—"}</TableCell>
+        <TableCell>
+          {log.success ? (
+            <Chip label="OK" size="small" color="success" />
+          ) : (
+            <Chip label="FAIL" size="small" color="error" />
+          )}
+        </TableCell>
+      </TableRow>
+      <TableRow>
+        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={7}>
+          <Collapse in={open} timeout="auto" unmountOnExit>
+            <Box sx={{ margin: 1, display: "flex", gap: 4, flexDirection: { xs: "column", md: "row" } }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="subtitle2" gutterBottom component="div" sx={{ fontWeight: 600 }}>
+                  Input
+                </Typography>
+                <Box sx={{ bgcolor: "background.default", p: 2, borderRadius: 1, maxHeight: 400, overflow: "auto", whiteSpace: "pre-wrap", fontSize: "0.85rem", fontFamily: "monospace", border: '1px solid', borderColor: 'divider' }}>
+                  {log.input_text || "No input recorded"}
+                </Box>
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="subtitle2" gutterBottom component="div" sx={{ fontWeight: 600 }}>
+                  Output
+                </Typography>
+                <Box sx={{ bgcolor: "background.default", p: 2, borderRadius: 1, maxHeight: 400, overflow: "auto", whiteSpace: "pre-wrap", fontSize: "0.85rem", fontFamily: "monospace", border: '1px solid', borderColor: 'divider' }}>
+                  {log.output_text || "No output recorded"}
+                </Box>
+              </Box>
+            </Box>
+            {log.error_message && (
+              <Box sx={{ margin: 1 }}>
+                <Typography variant="subtitle2" color="error" gutterBottom component="div" sx={{ fontWeight: 600 }}>
+                  Error Message
+                </Typography>
+                <Box sx={{ bgcolor: "error.lighter", color: "error.main", p: 2, borderRadius: 1, whiteSpace: "pre-wrap", fontSize: "0.85rem", fontFamily: "monospace" }}>
+                  {log.error_message}
+                </Box>
+              </Box>
+            )}
+          </Collapse>
+        </TableCell>
+      </TableRow>
+    </>
+  );
+}
+
 export default function LLMDashboardPage() {
   const [stats, setStats] = useState<LLMStatsResponse | null>(null);
   const [logsData, setLogsData] = useState<LLMCallLogListResponse | null>(null);
@@ -73,7 +143,7 @@ export default function LLMDashboardPage() {
   return (
     <Box>
       <Typography variant="h4" sx={{ fontWeight: 700, mb: 3 }}>
-        LLM Monitor
+        LLM Trace
       </Typography>
 
       {!stats ? (
@@ -183,34 +253,18 @@ export default function LLMDashboardPage() {
             <Table size="small">
               <TableHead>
                 <TableRow>
+                  <TableCell />
                   <TableCell>Time</TableCell>
                   <TableCell>Operation</TableCell>
                   <TableCell>Model</TableCell>
                   <TableCell align="right">Latency</TableCell>
                   <TableCell align="right">Tokens</TableCell>
-                  <TableCell align="right">Input</TableCell>
-                  <TableCell align="right">Output</TableCell>
                   <TableCell>Status</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {logsData?.logs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell sx={{ whiteSpace: "nowrap" }}>{new Date(log.created_at).toLocaleString()}</TableCell>
-                    <TableCell><Chip label={log.operation} size="small" variant="outlined" /></TableCell>
-                    <TableCell sx={{ fontSize: "0.8rem" }}>{log.model}</TableCell>
-                    <TableCell align="right">{formatMs(log.latency_ms)}</TableCell>
-                    <TableCell align="right">{log.total_tokens ?? "—"}</TableCell>
-                    <TableCell align="right">{log.input_chars ?? "—"}</TableCell>
-                    <TableCell align="right">{log.output_chars ?? "—"}</TableCell>
-                    <TableCell>
-                      {log.success ? (
-                        <Chip label="OK" size="small" color="success" />
-                      ) : (
-                        <Chip label="FAIL" size="small" color="error" />
-                      )}
-                    </TableCell>
-                  </TableRow>
+                  <LogTableRow key={log.id} log={log} />
                 ))}
                 {!logsData?.logs.length && (
                   <TableRow>

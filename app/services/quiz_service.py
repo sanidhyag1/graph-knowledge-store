@@ -833,3 +833,26 @@ def _parse_and_validate(raw: str, quiz_type: str) -> list[dict]:
         raise ValueError(f"JSON schema validation failed:\n{error_text}")
         
     return parsed_list
+
+
+async def retake_quiz(session: AsyncSession, quiz_id: str) -> str | None:
+    result = await session.execute(select(QuizAttempt).where(QuizAttempt.id == quiz_id))
+    original = result.scalar_one_or_none()
+    if not original:
+        return None
+
+    new_attempt = QuizAttempt(
+        quiz_type=original.quiz_type,
+        topics=original.topics,
+        keywords=original.keywords,
+        num_questions=original.num_questions,
+        article_count=original.article_count,
+        status="ready",
+        source_articles=original.source_articles,
+        source_flashcard_ids=original.source_flashcard_ids,
+        questions=original.questions,
+    )
+    session.add(new_attempt)
+    await session.commit()
+    await session.refresh(new_attempt)
+    return str(new_attempt.id)

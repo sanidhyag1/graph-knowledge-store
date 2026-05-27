@@ -16,6 +16,8 @@ class LLMCallLogResponse(BaseModel):
     error_message: str | None = None
     input_chars: int | None = None
     output_chars: int | None = None
+    input_text: str | None = None
+    output_text: str | None = None
     num_ctx: int | None = None
     temperature: float | None = None
     article_id: uuid.UUID | None = None

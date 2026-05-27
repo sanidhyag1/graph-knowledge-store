@@ -8,11 +8,14 @@ class QuizGenerateRequest(BaseModel):
     keywords: list[str] = Field(default_factory=list)
     quiz_type: str = Field(pattern="^(mcq|short_answer|flashcard)$")
     num_questions: int = Field(default=5, ge=1, le=15)
+    all_articles: bool = False
+    article_ids: list[str] = Field(default_factory=list)
 
 
 class ArticleQuizRequest(BaseModel):
     quiz_type: str = Field(pattern="^(mcq|short_answer|flashcard)$")
     num_questions: int = Field(default=5, ge=1, le=15)
+    include_related: bool = True
 
 
 class WeakAreasRequest(BaseModel):

@@ -43,7 +43,7 @@ const NAV_ITEMS = [
   { to: "/quiz", label: "Quiz", icon: <QuizOutlinedIcon />, end: false },
   { to: "/study", label: "Study", icon: <SchoolOutlinedIcon />, end: false },
   { to: "/chat", label: "Ask AI", icon: <SmartToyOutlinedIcon />, end: false },
-  { to: "/llm-monitor", label: "LLM Monitor", icon: <MonitorHeartOutlinedIcon />, end: false },
+  { to: "/llm-monitor", label: "LLM Trace", icon: <MonitorHeartOutlinedIcon />, end: false },
   { to: "/obsidian", label: "Obsidian", icon: <FolderSpecialOutlinedIcon />, end: false },
 ];
 

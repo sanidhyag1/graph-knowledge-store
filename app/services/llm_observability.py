@@ -79,6 +79,8 @@ def log_llm_call(
                 total_tokens=total_tokens,
                 input_chars=input_chars or None,
                 output_chars=output_chars or None,
+                input_text=input_text or None,
+                output_text=output_text or None,
                 num_ctx=num_ctx,
                 temperature=temperature,
                 article_id=article_id,
