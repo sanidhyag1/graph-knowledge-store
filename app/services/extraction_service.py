@@ -15,16 +15,16 @@ Return ONLY a valid JSON object with this exact structure:
   "topics": ["topic1", "topic2"],
   "keywords": ["keyword1", "keyword2"],
   "entities": [
-    {{"name": "Entity Name", "type": "Person|Organization|Technology|Place|Concept"}}
+    {{"name": "Entity Name", "type": "Person|Organization|Technology|Place|Concept|Algorithm|Theory|Dataset|Metric|Event"}}
   ],
-  "summary": "A 1-2 sentence summary of the article."
+  "summary": "A 2-3 sentence summary of the article's main argument and conclusions."
 }}
 
 Rules:
-- topics: max 5 broad themes/subjects
-- keywords: max 10 important specific terms
-- entities: named entities with their type
-- summary: concise, informative
+- topics: 3-5 broad themes at the level of a university course topic (e.g., "Machine Learning", "Quantum Mechanics", not "Science" or "Section 2.1")
+- keywords: 5-10 important specific technical terms, named methods, or unique concepts from this article
+- entities: named entities with their type — include algorithms, theories, and datasets as entities
+- summary: concise but include the article's main claim/finding, not just its topic
 - Do NOT include backslashes, LaTeX, or escape sequences in string values
 - Use Unicode symbols (e.g. γ, β, α, ∑, √, ×) instead of LaTeX in all text fields
 
@@ -70,9 +70,9 @@ def _extract_json(text: str) -> dict | None:
 
 
 def extract_metadata(content: str) -> dict:
-    prompt = EXTRACTION_PROMPT.format(content=content[:4000])
+    prompt = EXTRACTION_PROMPT.format(content=content[:6000])
     try:
-        raw = chat(prompt, system=EXTRACTION_SYSTEM)
+        raw = chat(prompt, system=EXTRACTION_SYSTEM, temperature=0.0)
         data = _extract_json(raw)
         if not data:
             return {"topics": [], "keywords": [], "entities": [], "summary": ""}

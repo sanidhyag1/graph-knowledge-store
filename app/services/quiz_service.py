@@ -21,16 +21,24 @@ logger = logging.getLogger(__name__)
 
 
 def _questions_for_length(content_len: int) -> int:
-    if content_len < 2000:
-        return 1
+    # OLD SETTINGS (for 8192 context window):
+    # if content_len < 2000: return 1
+    # if content_len < 5000: return 2
+    # if content_len < 10000: return 3
+    # return 4
+
+    # NEW SETTINGS (for 64k context window):
     if content_len < 5000:
-        return 2
-    if content_len < 10000:
         return 3
-    return 4
+    if content_len < 15000:
+        return 5
+    if content_len < 30000:
+        return 8
+    return 12
 
 
-CHUNK_SIZE = 10000  # ~2500 tokens — safe for 8192 context window
+# OLD SETTING: CHUNK_SIZE = 10000  # ~2500 tokens — safe for 8192 context window
+CHUNK_SIZE = 40000  # ~10,000 tokens — safe for 64000 context window
 
 def _chunk_content(content: str) -> list[str]:
     """Split article content into chunks of roughly CHUNK_SIZE characters.
@@ -67,7 +75,7 @@ def _assess_question_count(content: str, title: str, quiz_type: str) -> int:
     sample_chunk = chunks[0]
 
     prompt = ASSESS_PROMPT.format(quiz_type=quiz_type, title=title, content=sample_chunk)
-    ctx_size = 8192
+    ctx_size = settings.llm_quiz_num_ctx
 
     raw = chat(prompt, "You are a helpful assistant that responds with only integers.", num_ctx=ctx_size)
     text = raw.strip()
@@ -84,80 +92,87 @@ def _assess_question_count(content: str, title: str, quiz_type: str) -> int:
     return max(1, total)
 
 
-MCQ_SYSTEM = """You are a JSON-only API. You output valid JSON arrays and nothing else. No prose. No markdown. No numbered lists. No explanation. Just JSON.
+MCQ_SYSTEM = """You are a JSON-only API. You output valid JSON arrays and nothing else.
 
 Generate exactly {{n}} multiple-choice question(s) from the given article.
 
 RULES:
-- Test UNDERSTANDING and SYNTHESIS, not copy-paste facts
+- Apply Bloom's taxonomy: focus on Application, Analysis, and Evaluation levels — NOT simple recall
+- Each question should test whether the reader truly UNDERSTANDS a concept, not just memorized a fact
 - Each question must have exactly 4 options labeled A, B, C, D
 - Only ONE option is correct
-- Wrong options (distractors) should be plausible but clearly incorrect to someone who understood the material
-- Include a brief explanation of why the correct answer is right
-- Questions should range from moderate to challenging
+- Distractor design: each wrong answer should target a common misconception or a plausible-but-wrong reasoning path related to the topic
+- The explanation must say WHY the correct answer is right AND briefly why at least one distractor is wrong
+- Vary question types: include "which of the following is true", "what would happen if", "why does X occur", "which best describes"
 - Use Unicode symbols (e.g. γ, β, α, ∑, √, ×) instead of LaTeX in all text
 
-Output format — respond with ONLY this JSON structure, no other text:
+EXAMPLE (do not copy this — use the article's content):
 [
   {{
-    "question": "string",
+    "question": "If the learning rate is doubled during gradient descent, what is the most likely effect on convergence?",
     "options": [
-      {{"label": "A", "text": "string"}},
-      {{"label": "B", "text": "string"}},
-      {{"label": "C", "text": "string"}},
-      {{"label": "D", "text": "string"}}
+      {{"label": "A", "text": "The model converges twice as fast with the same accuracy"}},
+      {{"label": "B", "text": "The loss function may oscillate and fail to converge"}},
+      {{"label": "C", "text": "The gradients become zero, stopping training"}},
+      {{"label": "D", "text": "The model automatically adjusts batch size to compensate"}}
     ],
-    "correct_index": 0,
-    "explanation": "string"
+    "correct_index": 1,
+    "explanation": "A larger learning rate causes larger parameter updates, which can overshoot the minimum and cause oscillation. Option A is wrong because speed and accuracy are not linearly related to learning rate. Option C confuses learning rate with gradient vanishing."
   }}
 ]
 
-IMPORTANT: Your entire response must start with [ and end with ]. Do not include any text before or after the JSON array."""
+Output ONLY a JSON array. Start with [ and end with ]. No other text."""
 
-SHORT_ANSWER_SYSTEM = """You are a JSON-only API. You output valid JSON arrays and nothing else. No prose. No markdown. No numbered lists. No explanation. Just JSON.
+SHORT_ANSWER_SYSTEM = """You are a JSON-only API. You output valid JSON arrays and nothing else.
 
 Generate exactly {{n}} short-answer question(s) from the given article.
 
 RULES:
 - Questions should require 1-3 sentence answers
 - Test COMPREHENSION, APPLICATION, and ANALYSIS — not regurgitation
-- Provide a model answer and 2-4 key points that a good answer should cover
-- Questions should range from moderate to challenging
+- Vary question types: "Explain why...", "Compare X and Y...", "What would happen if...", "How does X relate to Y..."
+- The model_answer should be a complete, self-contained answer (2-4 sentences)
+- key_points: list 2-4 specific facts or concepts that a correct answer MUST mention — be precise (e.g., "mentions that gradient descent requires a differentiable loss function" not just "gradient descent")
 - Use Unicode symbols (e.g. γ, β, α, ∑, √, ×) instead of LaTeX in all text
 
-Output format — respond with ONLY this JSON structure, no other text:
+EXAMPLE (do not copy this — use the article's content):
 [
   {{
-    "question": "string",
-    "model_answer": "string",
-    "key_points": ["string"]
+    "question": "Why does batch normalization help training deep neural networks?",
+    "model_answer": "Batch normalization reduces internal covariate shift by normalizing layer inputs to have zero mean and unit variance. This allows higher learning rates and reduces sensitivity to weight initialization, speeding up convergence and acting as a mild regularizer.",
+    "key_points": [
+      "Normalizes activations to zero mean and unit variance",
+      "Reduces internal covariate shift",
+      "Enables higher learning rates",
+      "Acts as regularization"
+    ]
   }}
 ]
 
-IMPORTANT: Your entire response must start with [ and end with ]. Do not include any text before or after the JSON array."""
+Output ONLY a JSON array. Start with [ and end with ]. No other text."""
 
-FLASHCARD_SYSTEM = """You are a JSON-only API. You output valid JSON arrays and nothing else. No prose. No markdown. No numbered lists. No explanation. Just JSON.
+FLASHCARD_SYSTEM = """You are a JSON-only API. You output valid JSON arrays and nothing else.
 
-Generate exactly {{n}} flashcard(s) from the given article.
+Generate exactly {{n}} flashcard(s) from the given article, optimized for spaced repetition study.
 
 RULES:
-- Front: A concept name, term, or focused question (concise, 1-2 lines max)
-- Back: A clear, complete explanation (2-4 sentences)
-- Hint: A brief clue that helps recall without giving away the answer
-- Cover KEY concepts, definitions, relationships, and important details
-- Prioritize the most important and testable knowledge
+- Front: A precise question or concept prompt (1-2 lines). Avoid yes/no questions. Frame as "What is...", "How does...", "Why does...", "Define..."
+- Back: A clear, complete answer (2-4 sentences). Include the key definition AND one concrete example or application
+- Hint: A category clue or first-letter hint that aids recall without revealing the answer (e.g., "Think about optimization algorithms" or "Starts with 'back-'")
+- ONE concept per card — do not combine multiple ideas
+- Prioritize: definitions > relationships between concepts > formulas > edge cases
 - Use Unicode symbols (e.g. γ, β, α, ∑, √, ×) instead of LaTeX in all text
 
-Output format — respond with ONLY this JSON structure, no other text:
+EXAMPLE (do not copy this — use the article's content):
 [
   {{
-    "front": "string",
-    "back": "string",
-    "hint": "string"
+    "front": "What is the vanishing gradient problem in deep networks?",
+    "back": "The vanishing gradient problem occurs when gradients become exponentially small as they propagate backward through many layers, making early layers learn extremely slowly. This is particularly severe with sigmoid and tanh activations. ReLU and its variants largely mitigate this issue.",
+    "hint": "Related to backpropagation through many layers — think about what happens to small numbers when multiplied repeatedly"
   }}
 ]
 
-IMPORTANT: Your entire response must start with [ and end with ]. Do not include any text before or after the JSON array."""
+Output ONLY a JSON array. Start with [ and end with ]. No other text."""
 
 DEDUP_SECTION = """
 PREVIOUSLY GENERATED QUESTIONS (do NOT repeat or create similar questions):
@@ -223,9 +238,10 @@ ARTICLE CONTENT:
 
 
 class ArticleInfo:
-    __slots__ = ("title", "summary", "topics", "keywords", "content")
+    __slots__ = ("id", "title", "summary", "topics", "keywords", "content")
 
-    def __init__(self, title: str, summary: str | None, topics: list, keywords: list, content: str):
+    def __init__(self, id: str | object, title: str, summary: str | None, topics: list, keywords: list, content: str):
+        self.id = str(id)
         self.title = title
         self.summary = summary or ""
         self.topics = topics or []
@@ -239,7 +255,7 @@ async def fetch_articles(
     keywords: list[str] | None = None,
 ) -> list[ArticleInfo]:
     stmt = select(
-        Article.title, Article.summary, Article.topics, Article.keywords, Article.content,
+        Article.id, Article.title, Article.summary, Article.topics, Article.keywords, Article.content,
     ).order_by(Article.updated_at.desc())
 
     or_clauses = []
@@ -260,8 +276,9 @@ async def fetch_articles(
     rows = result.all()
 
     articles = []
-    for title, summary, topics_list, keywords_list, content in rows:
+    for id, title, summary, topics_list, keywords_list, content in rows:
         articles.append(ArticleInfo(
+            id=id,
             title=title,
             summary=summary,
             topics=topics_list or [],
@@ -273,14 +290,15 @@ async def fetch_articles(
 
 async def fetch_article_by_id(session: AsyncSession, article_id: str) -> ArticleInfo | None:
     stmt = select(
-        Article.title, Article.summary, Article.topics, Article.keywords, Article.content,
+        Article.id, Article.title, Article.summary, Article.topics, Article.keywords, Article.content,
     ).where(Article.id == article_id)
     result = await session.execute(stmt)
     row = result.first()
     if not row:
         return None
-    title, summary, topics, keywords, content = row
+    id, title, summary, topics, keywords, content = row
     return ArticleInfo(
+        id=id,
         title=title,
         summary=summary,
         topics=topics or [],
@@ -381,7 +399,7 @@ async def run_generation(quiz_id: str, articles: list[ArticleInfo]) -> None:
                     prompt = dedup_section + "\n" + prompt
                 prompt += f"\n\nGenerate exactly {k} question(s) from this article."
 
-                ctx_size = 8192  # Safe limit — unchanged
+                ctx_size = settings.llm_quiz_num_ctx
 
                 logger.info(
                     "Calling LLM: chunk %d/%d, length %d chars, num_ctx %d",
@@ -391,7 +409,7 @@ async def run_generation(quiz_id: str, articles: list[ArticleInfo]) -> None:
                 parsed = []
                 current_prompt = prompt
                 for attempt_num in range(2):
-                    raw = await loop.run_in_executor(None, partial(chat, prompt=current_prompt, system=system, num_ctx=ctx_size, max_tokens=4096))
+                    raw = await loop.run_in_executor(None, partial(chat, prompt=current_prompt, system=system, num_ctx=ctx_size, max_tokens=4096, temperature=0.3))
                     logger.info("LLM returned %d characters.", len(raw))
                     try:
                         parsed = _parse_and_validate(raw, attempt.quiz_type)
@@ -516,12 +534,12 @@ async def run_weak_areas_generation(quiz_id: str) -> None:
                 if dedup_section:
                     prompt = dedup_section + "\n" + prompt
 
-                ctx_size = 8192
+                ctx_size = settings.llm_quiz_num_ctx
 
                 parsed = []
                 current_prompt = prompt
                 for attempt_num in range(2):
-                    raw = await loop.run_in_executor(None, partial(chat, prompt=current_prompt, system=system, num_ctx=ctx_size, max_tokens=4096))
+                    raw = await loop.run_in_executor(None, partial(chat, prompt=current_prompt, system=system, num_ctx=ctx_size, max_tokens=4096, temperature=0.3))
                     try:
                         parsed = _parse_and_validate(raw, "mcq")
                         break

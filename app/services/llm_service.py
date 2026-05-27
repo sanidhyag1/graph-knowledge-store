@@ -24,6 +24,7 @@ def _call_llm(
     input_text: str = "",
     article_id=None,
     max_tokens: int | None = None,
+    temperature: float = 0.1,
 ) -> str:
     start = time.monotonic()
     try:
@@ -31,7 +32,7 @@ def _call_llm(
         kwargs = {
             "model": settings.llm_chat_model,
             "messages": messages,
-            "temperature": 0.1,
+            "temperature": temperature,
             "extra_body": {"num_ctx": ctx},
         }
         if max_tokens is not None:
@@ -47,7 +48,7 @@ def _call_llm(
             input_text=input_text,
             output_text=content or "",
             num_ctx=ctx,
-            temperature=0.1,
+            temperature=temperature,
             article_id=article_id,
             api_usage=extract_usage(response),
         )
@@ -61,7 +62,7 @@ def _call_llm(
             input_text=input_text,
             error_message=str(e),
             num_ctx=ctx,
-            temperature=0.1,
+            temperature=temperature,
             article_id=article_id,
         )
         raise
@@ -89,13 +90,14 @@ def chat(
     num_ctx: int | None = None,
     article_id=None,
     max_tokens: int | None = None,
+    temperature: float = 0.1,
 ) -> str:
     ctx = num_ctx or settings.llm_num_ctx
     messages = [
         {"role": "system", "content": system},
         {"role": "user", "content": prompt},
     ]
-    return _call_llm(messages, ctx, operation="chat", input_text=prompt, article_id=article_id, max_tokens=max_tokens)
+    return _call_llm(messages, ctx, operation="chat", input_text=prompt, article_id=article_id, max_tokens=max_tokens, temperature=temperature)
 
 
 def chat_messages(

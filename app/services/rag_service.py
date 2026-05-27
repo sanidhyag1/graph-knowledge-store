@@ -19,6 +19,8 @@ Rules:
 - Answer the question using only information from the provided context
 - If the context doesn't contain enough information to answer, say so honestly
 - Cite which article(s) you're drawing from when possible
+- When multiple articles are relevant, SYNTHESIZE information across them — don't just pick one
+- If articles contain contradictory information, mention the discrepancy
 - Be thorough but concise
 - Use markdown formatting for clarity (headers, lists, code blocks, bold)
 - Use Unicode symbols (e.g. γ, β, α, ∑, √, ×) instead of LaTeX"""
@@ -75,7 +77,7 @@ def _trim_history(history: list[dict]) -> list[dict]:
 def _build_context(articles: list[dict]) -> str:
     parts = []
     for i, a in enumerate(articles, 1):
-        content = a["content"][:3000]
+        content = a["content"][:6000]
         parts.append(f"--- Article {i}: {a['title']} (relevance: {a['score']:.2f}) ---\n{content}")
     return "\n\n".join(parts)
 

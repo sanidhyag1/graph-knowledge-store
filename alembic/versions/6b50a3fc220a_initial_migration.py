@@ -12,6 +12,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 import pgvector
 
+from app.config import settings
+
 # revision identifiers, used by Alembic.
 revision: str = '6b50a3fc220a'
 down_revision: Union[str, Sequence[str], None] = None
@@ -70,7 +72,7 @@ def upgrade() -> None:
     sa.Column('article_id', sa.Uuid(), nullable=False),
     sa.Column('chunk_text', sa.Text(), nullable=False),
     sa.Column('chunk_index', sa.Integer(), nullable=False),
-    sa.Column('embedding', pgvector.sqlalchemy.vector.VECTOR(dim=1024), nullable=True),
+    sa.Column('embedding', pgvector.sqlalchemy.vector.VECTOR(dim=settings.llm_embedding_dimensions), nullable=True),
     sa.ForeignKeyConstraint(['article_id'], ['articles.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )

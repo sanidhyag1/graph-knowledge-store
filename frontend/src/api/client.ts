@@ -153,6 +153,11 @@ export interface FlashcardItem {
   hint: string;
 }
 
+export interface SourceArticle {
+  id: string;
+  title: string;
+}
+
 export interface QuizResponse {
   quiz_id: string;
   quiz_type: QuizType;
@@ -164,6 +169,7 @@ export interface QuizResponse {
   score: number | null;
   total: number | null;
   status: string;
+  source_articles?: SourceArticle[] | null;
   created_at: string | null;
   completed_at: string | null;
 }
@@ -183,6 +189,7 @@ export interface QuizStatusResponse {
   keywords: string[];
   article_count: number;
   questions: McqQuestion[] | ShortAnswerQuestion[] | FlashcardItem[];
+  source_articles?: SourceArticle[] | null;
   error: string | null;
 }
 
@@ -196,6 +203,7 @@ export interface QuizHistoryItem {
   num_questions: number;
   article_count: number;
   status: string;
+  source_articles?: SourceArticle[] | null;
   created_at: string | null;
   completed_at: string | null;
 }

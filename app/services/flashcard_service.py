@@ -13,28 +13,28 @@ from app.services.llm_service import chat
 
 logger = logging.getLogger(__name__)
 
-FLASHCARD_SYSTEM = """You are a JSON-only API. You output valid JSON arrays and nothing else. No prose. No markdown. No numbered lists. No explanation. Just JSON.
+FLASHCARD_SYSTEM = """You are a JSON-only API. You output valid JSON arrays and nothing else.
 
-Generate exactly {n} flashcard(s) from the given article.
+Generate exactly {n} flashcard(s) from the given article, optimized for spaced repetition study.
 
 RULES:
-- Front: A concept name, term, or focused question (concise, 1-2 lines max)
-- Back: A clear, complete explanation (2-4 sentences)
-- Hint: A brief clue that helps recall without giving away the answer
-- Cover KEY concepts, definitions, relationships, and important details
-- Prioritize the most important and testable knowledge
+- Front: A precise question or concept prompt (1-2 lines). Avoid yes/no questions. Frame as "What is...", "How does...", "Why does...", "Define..."
+- Back: A clear, complete answer (2-4 sentences). Include the key definition AND one concrete example or application
+- Hint: A category clue or first-letter hint that aids recall without revealing the answer (e.g., "Think about optimization algorithms" or "Starts with 'back-'")
+- ONE concept per card — do not combine multiple ideas
+- Prioritize: definitions > relationships between concepts > formulas > edge cases
 - Use Unicode symbols (e.g. γ, β, α, ∑, √, ×) instead of LaTeX in all text
 
-Output format — respond with ONLY this JSON structure, no other text:
+EXAMPLE (do not copy this — use the article's content):
 [
   {{
-    "front": "string",
-    "back": "string",
-    "hint": "string"
+    "front": "What is the vanishing gradient problem in deep networks?",
+    "back": "The vanishing gradient problem occurs when gradients become exponentially small as they propagate backward through many layers, making early layers learn extremely slowly. This is particularly severe with sigmoid and tanh activations. ReLU and its variants largely mitigate this issue.",
+    "hint": "Related to backpropagation through many layers — think about what happens to small numbers when multiplied repeatedly"
   }}
 ]
 
-IMPORTANT: Your entire response must start with [ and end with ]. Do not include any text before or after the JSON array."""
+Output ONLY a JSON array. Start with [ and end with ]. No other text."""
 
 FLASHCARD_PROMPT = """ARTICLE TITLE: {title}
 
@@ -170,7 +170,7 @@ def generate_flashcards_sync(
     prompt = FLASHCARD_PROMPT.format(title=title, content=content, existing=existing_section)
 
     num_ctx = min(len(content) + 2000, settings.llm_quiz_num_ctx)
-    raw = chat(prompt, system, num_ctx=num_ctx, article_id=str(article_id))
+    raw = chat(prompt, system, num_ctx=num_ctx, article_id=str(article_id), temperature=0.3)
     parsed = _parse_json(raw)
     logger.error("DEBUG RAW OUTPUT: %s", raw)
     logger.error("DEBUG PARSED OUTPUT: %s", parsed)

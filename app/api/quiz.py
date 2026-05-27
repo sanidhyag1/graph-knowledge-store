@@ -43,6 +43,7 @@ async def generate_quiz(
         num_questions=n,
         article_count=len(articles),
         status="generating",
+        source_articles=[{"id": a.id, "title": a.title} for a in articles],
     )
     session.add(attempt)
     await session.commit()
@@ -73,6 +74,7 @@ async def generate_article_quiz(
         num_questions=10,
         article_count=1,
         status="generating",
+        source_articles=[{"id": article.id, "title": article.title}],
     )
     session.add(attempt)
     await session.commit()
@@ -156,6 +158,7 @@ async def quiz_history(
             num_questions=a.num_questions,
             article_count=a.article_count,
             status=a.status,
+            source_articles=a.source_articles,
             created_at=a.created_at,
             completed_at=a.completed_at,
         )
@@ -179,6 +182,7 @@ async def quiz_status(quiz_id: str, session: AsyncSession = Depends(get_session)
         keywords=attempt.keywords or [],
         article_count=attempt.article_count,
         questions=attempt.questions or [],
+        source_articles=attempt.source_articles,
         error=attempt.error,
     )
 
@@ -261,6 +265,7 @@ def _attempt_to_response(a: QuizAttempt) -> QuizResponse:
         total=a.num_questions,
         status=a.status,
         source_flashcard_ids=a.source_flashcard_ids,
+        source_articles=a.source_articles,
         created_at=a.created_at,
         completed_at=a.completed_at,
     )

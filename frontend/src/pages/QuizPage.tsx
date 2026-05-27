@@ -199,8 +199,8 @@ export default function QuizPage() {
   const [keywords, setKeywords] = useState<string[]>([]);
   const [indexLoading, setIndexLoading] = useState(true);
 
-  const [, setQuizId] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
+  const [, setQuizId] = useState<string | null>(() => localStorage.getItem(ACTIVE_QUIZ_KEY));
+  const [status, setStatus] = useState<string | null>(() => localStorage.getItem(ACTIVE_QUIZ_KEY) ? "generating" : null);
   const [progress, setProgress] = useState(0);
   const [total, setTotal] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -229,15 +229,7 @@ export default function QuizPage() {
     });
   }, []);
 
-  useEffect(() => {
-    const savedId = localStorage.getItem(ACTIVE_QUIZ_KEY);
-    if (savedId) {
-      setQuizId(savedId);
-      setStatus("generating");
-      setTotal(numQuestions);
-      startPolling(savedId);
-    }
-  }, []);
+
 
   useEffect(() => {
     if (tab === 1) loadHistory();
@@ -295,6 +287,13 @@ export default function QuizPage() {
       }
     }, POLL_INTERVAL_MS);
   }, [stopPolling, enqueueSnackbar]);
+
+  useEffect(() => {
+    const savedId = localStorage.getItem(ACTIVE_QUIZ_KEY);
+    if (savedId) {
+      startPolling(savedId);
+    }
+  }, [startPolling]);
 
   async function handleGenerate() {
     if (!selectedTopics.length && !selectedKeywords.length) {
@@ -427,6 +426,20 @@ export default function QuizPage() {
           <Typography variant="body2" color="text.secondary">
             Based on {quiz.article_count} articles — {filterLabel}
           </Typography>
+          {quiz.source_articles && quiz.source_articles.length > 0 && (
+            <Box sx={{ mt: 1, display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+              {quiz.source_articles.map((a) => (
+                <Chip
+                  key={a.id}
+                  label={a.title}
+                  size="small"
+                  variant="outlined"
+                  onClick={() => window.open(`/article/${a.id}`, "_blank")}
+                  sx={{ cursor: "pointer" }}
+                />
+              ))}
+            </Box>
+          )}
         </Box>
         <QuizRunner quiz={quiz} onRestart={handleRestart} onComplete={handleComplete} />
       </Box>
@@ -681,6 +694,22 @@ export default function QuizPage() {
                                 </>
                               )}
                             </Box>
+                            {item.source_articles && item.source_articles.length > 0 && (
+                              <Box sx={{ mt: 1 }}>
+                                <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                                  {item.source_articles.map((a) => (
+                                    <Chip 
+                                      key={a.id} 
+                                      label={a.title} 
+                                      size="small" 
+                                      variant="outlined" 
+                                      sx={{ maxWidth: 200 }} 
+                                      onClick={(e) => { e.stopPropagation(); window.open(`/article/${a.id}`, "_blank"); }}
+                                    />
+                                  ))}
+                                </Box>
+                              </Box>
+                            )}
                           </Box>
                           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                             <Box sx={{ textAlign: "right" }}>

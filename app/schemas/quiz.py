@@ -35,6 +35,7 @@ class QuizStatusResponse(BaseModel):
     keywords: list[str]
     article_count: int
     questions: list[dict]
+    source_articles: list[dict] | None = None
     error: str | None = None
 
 
@@ -80,6 +81,7 @@ class QuizResponse(BaseModel):
     total: int | None = None
     status: str
     source_flashcard_ids: list[str | None] | None = None
+    source_articles: list[dict] | None = None
     created_at: datetime | None = None
     completed_at: datetime | None = None
 
@@ -94,6 +96,7 @@ class QuizHistoryItem(BaseModel):
     num_questions: int
     article_count: int
     status: str
+    source_articles: list[dict] | None = None
     created_at: datetime | None = None
     completed_at: datetime | None = None
 
