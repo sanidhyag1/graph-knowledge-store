@@ -10,11 +10,6 @@ from app.config import settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    try:
-        from app.graph.neo4j_client import init_constraints
-        init_constraints()
-    except Exception:
-        pass
 
     # Create uploads directory
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
@@ -32,11 +27,6 @@ async def lifespan(app: FastAPI):
     stop_worker()
     stop_scheduler()
 
-    try:
-        from app.graph.neo4j_client import close_driver
-        close_driver()
-    except Exception:
-        pass
 
 
 app = FastAPI(title="Graph Knowledge Store", version="0.1.0", lifespan=lifespan)

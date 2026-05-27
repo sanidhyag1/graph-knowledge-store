@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 _job_event = asyncio.Event()
 _worker_task: asyncio.Task | None = None
+_active_jobs: dict[uuid.UUID, asyncio.Task] = {}
 _shutdown = False
 
 
@@ -20,16 +21,22 @@ def trigger_worker():
     _job_event.set()
 
 
+def cancel_active_job(job_id: uuid.UUID) -> bool:
+    """Attempt to cancel a running job task."""
+    task = _active_jobs.get(job_id)
+    if task and not task.done():
+        task.cancel()
+        return True
+    return False
+
+
 async def recover_stuck_jobs():
     """Recover jobs that were left in processing state due to server crash/restart."""
-    from datetime import timedelta
     try:
         async with async_session_factory() as session:
-            timeout_threshold = datetime.now(timezone.utc) - timedelta(minutes=30)
             result = await session.execute(
                 update(BackgroundJob)
                 .where(BackgroundJob.status == "processing")
-                .where(BackgroundJob.started_at < timeout_threshold)
                 .values(status="pending", started_at=None)
             )
             await session.commit()
@@ -76,13 +83,11 @@ async def _process_job(job_id: uuid.UUID):
 
         elif job_type == "generate_flashcards":
             from app.services.flashcard_service import regenerate_flashcards
-            from app.database import async_session_factory
             async with async_session_factory() as session:
                 await regenerate_flashcards(session, uuid.UUID(target_id))
 
         elif job_type == "generate_flashcards_more":
             from app.services.flashcard_service import generate_flashcards_for_article
-            from app.database import async_session_factory
             async with async_session_factory() as session:
                 n = payload.get("n", 5)
                 await generate_flashcards_for_article(session, uuid.UUID(target_id), n=n)
@@ -152,7 +157,12 @@ async def _worker_loop():
                     job_id = None
 
             if job_id:
-                await _process_job(job_id)
+                task = asyncio.create_task(_process_job(job_id))
+                _active_jobs[job_id] = task
+                try:
+                    await task
+                finally:
+                    _active_jobs.pop(job_id, None)
             else:
                 # Wait for immediate trigger or timeout to poll again
                 try:

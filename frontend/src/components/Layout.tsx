@@ -18,7 +18,7 @@ import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import BookmarkOutlinedIcon from "@mui/icons-material/BookmarkOutlined";
 import AddBoxOutlinedIcon from "@mui/icons-material/AddBoxOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
-import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
+// import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import QuizOutlinedIcon from "@mui/icons-material/QuizOutlined";
 import SchoolOutlinedIcon from "@mui/icons-material/SchoolOutlined";
 import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
@@ -40,7 +40,6 @@ const NAV_ITEMS = [
   { to: "/bookmarks", label: "Bookmarks", icon: <BookmarkOutlinedIcon />, end: false },
   { to: "/editor", label: "New Article", icon: <AddBoxOutlinedIcon />, end: false },
   { to: "/search", label: "Search", icon: <SearchOutlinedIcon />, end: false },
-  { to: "/graph", label: "Graph", icon: <AccountTreeOutlinedIcon />, end: false },
   { to: "/quiz", label: "Quiz", icon: <QuizOutlinedIcon />, end: false },
   { to: "/study", label: "Study", icon: <SchoolOutlinedIcon />, end: false },
   { to: "/chat", label: "Ask AI", icon: <SmartToyOutlinedIcon />, end: false },

@@ -144,8 +144,8 @@ export default function SystemQueueDrawer({ open, onClose }: SystemQueueDrawerPr
                     disablePadding
                     alignItems="flex-start"
                     secondaryAction={
-                      isPending && (
-                        <Tooltip title="Cancel pending job" arrow>
+                      (isPending || isProcessing) && (
+                        <Tooltip title="Cancel job" arrow>
                           <IconButton
                             edge="end"
                             size="small"

@@ -34,9 +34,8 @@ if [ ! -f .env ]; then
 fi
 
 log "Checking Docker containers..."
-if ! docker compose ps -q postgres 2>/dev/null | grep -q . || \
-   ! docker compose ps -q neo4j 2>/dev/null | grep -q .; then
-    log "Starting databases (Postgres + Neo4j)..."
+if ! docker compose ps -q postgres 2>/dev/null | grep -q .; then
+    log "Starting database (Postgres)..."
     docker compose up -d
     DOCKER_STARTED=1
 
@@ -48,16 +47,9 @@ if ! docker compose ps -q postgres 2>/dev/null | grep -q . || \
         sleep 1
     done
 
-    log "Waiting for Neo4j..."
-    for i in $(seq 1 60); do
-        if docker compose exec -T neo4j cypher-shell -u neo4j -p password123 "RETURN 1" &>/dev/null; then
-            break
-        fi
-        sleep 2
-    done
-    log "Databases ready"
+    log "Database ready"
 else
-    warn "Databases already running"
+    warn "Database already running"
 fi
 
 log "Running database migrations..."
@@ -81,7 +73,6 @@ echo -e "${CYAN}  Graph Knowledge Store is running!${NC}"
 echo -e "${CYAN}========================================${NC}"
 echo -e "  Frontend:  ${GREEN}http://localhost:5173${NC}"
 echo -e "  Backend:   ${GREEN}http://localhost:8000${NC}"
-echo -e "  Neo4j:     ${GREEN}http://localhost:7474${NC}"
 echo ""
 echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop all services"
 echo ""

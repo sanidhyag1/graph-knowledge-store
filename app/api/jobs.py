@@ -96,16 +96,14 @@ async def list_jobs(session: AsyncSession = Depends(get_session)):
 
 @router.delete("/{job_id}", status_code=204)
 async def cancel_job(job_id: uuid.UUID, session: AsyncSession = Depends(get_session)):
-    """Cancel a background job by deleting it. Active processing jobs cannot be canceled."""
+    """Cancel a background job by deleting it. Active processing jobs will be interrupted."""
     job = await session.get(BackgroundJob, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
     if job.status == "processing":
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot cancel/delete a job that is already running/processing"
-        )
+        from app.services.job_worker import cancel_active_job
+        cancel_active_job(job_id)
 
     await session.delete(job)
     await session.commit()

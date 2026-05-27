@@ -165,12 +165,6 @@ async def update_manual_tags(
     await session.commit()
     await session.refresh(article)
 
-    from app.services.graph_service import sync_article_to_graph
-    loop = get_running_loop()
-    await loop.run_in_executor(
-        _executor,
-        partial(sync_article_to_graph, article_id, article.title, article.topics, article.keywords, article.entities or []),
-    )
 
     return article
 
@@ -180,9 +174,6 @@ async def delete_article(session: AsyncSession, article_id: uuid.UUID) -> bool:
     if not article:
         return False
 
-    from app.services.graph_service import delete_article_from_graph
-    loop = get_running_loop()
-    await loop.run_in_executor(_executor, delete_article_from_graph, article_id)
 
     # Remove from Obsidian tracking if applicable
     from app.models.obsidian_tracked_file import ObsidianTrackedFile
@@ -222,11 +213,6 @@ async def _enrich_article(article_id: uuid.UUID, title: str, content: str) -> No
 
             await generate_and_store_embeddings(session, article_id, f"{title}\n\n{content}")
 
-            from app.services.graph_service import sync_article_to_graph
-            await loop.run_in_executor(
-                _executor,
-                partial(sync_article_to_graph, article_id, title, metadata["topics"], metadata["keywords"], metadata["entities"]),
-            )
 
             if settings.flashcard_auto_generate:
                 try:
@@ -243,3 +229,58 @@ async def _enrich_article(article_id: uuid.UUID, title: str, content: str) -> No
                 await session.commit()
             except Exception:
                 pass
+
+
+async def get_article_neighbors(article_id: uuid.UUID, limit: int = 10) -> list[dict]:
+    from app.database import async_session_factory
+    from sqlalchemy import text
+    
+    async with async_session_factory() as session:
+        article = await get_article(session, article_id)
+        if not article:
+            return []
+
+        topics = article.topics or []
+        keywords = article.keywords or []
+
+        if not topics and not keywords:
+            return []
+
+        stmt = text("""
+        SELECT id, title,
+            (
+                SELECT count(*) 
+                FROM jsonb_array_elements_text(topics) t 
+                WHERE t = ANY(cast(:topics_arr as text[]))
+            ) + (
+                SELECT count(*) 
+                FROM jsonb_array_elements_text(keywords) k 
+                WHERE k = ANY(cast(:keywords_arr as text[]))
+            ) as shared_nodes
+        FROM articles
+        WHERE id != :article_id
+          AND (
+            topics ?| cast(:topics_arr as text[])
+            OR keywords ?| cast(:keywords_arr as text[])
+          )
+        ORDER BY shared_nodes DESC
+        LIMIT :limit
+        """)
+        
+        result = await session.execute(stmt, {
+            "article_id": article_id,
+            "topics_arr": topics,
+            "keywords_arr": keywords,
+            "limit": limit
+        })
+        
+        neighbors = []
+        for row in result:
+            neighbors.append({
+                "id": str(row[0]),
+                "title": row[1],
+                "shared_nodes": row[2],
+                "connection_type": "shared_tags"
+            })
+            
+        return neighbors

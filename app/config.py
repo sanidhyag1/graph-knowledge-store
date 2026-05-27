@@ -32,10 +32,6 @@ class Settings(BaseSettings):
     flashcard_maximum_interval: int = 365
     flashcard_minimum_ease: float = 1.3
 
-    neo4j_uri: str = "bolt://localhost:7687"
-    neo4j_user: str = "neo4j"
-    neo4j_password: str = "password123"
-
     obsidian_vault_path: str = ""
     obsidian_sync_interval_minutes: int = 30
     obsidian_attachment_path: str = ""
